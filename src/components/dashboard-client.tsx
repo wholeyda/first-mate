@@ -1,30 +1,39 @@
 /**
  * Dashboard Client Component
  *
- * Wraps the chat interface and goals sidebar.
- * This is a client component because it manages interactive state
- * (chat messages, goal updates, etc.)
+ * Main layout with two tabs: Chat and Schedule.
+ * - Chat tab: talk to First Mate, create goals
+ * - Schedule tab: view/approve the weekly calendar
+ * Goals sidebar is always visible.
  */
 
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
+import { WeekView } from "@/components/week-view";
 import { ParsedGoal } from "@/lib/parse-goal";
+import { ProposedBlock } from "@/lib/scheduler";
 import { Goal } from "@/types/database";
 
 interface DashboardClientProps {
   initialGoals: Goal[];
 }
 
+type Tab = "chat" | "schedule";
+
 export function DashboardClient({ initialGoals }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
+  const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const [proposedBlocks, setProposedBlocks] = useState<ProposedBlock[]>([]);
+  const [weekStart, setWeekStart] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
 
   function handleGoalCreated(parsedGoal: ParsedGoal) {
-    // Add the new goal to the sidebar (optimistic update)
     const newGoal: Goal = {
-      id: crypto.randomUUID(), // Temporary ID until page refresh
+      id: crypto.randomUUID(),
       user_id: "",
       title: parsedGoal.title,
       description: parsedGoal.description,
@@ -39,11 +48,110 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     setGoals((prev) => [...prev, newGoal]);
   }
 
+  // Generate the weekly schedule
+  async function handleGenerateSchedule() {
+    setIsGenerating(true);
+    try {
+      const response = await fetch("/api/schedule/generate", {
+        method: "POST",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProposedBlocks(data.blocks);
+        setWeekStart(data.weekStart);
+        setActiveTab("schedule");
+      }
+    } catch (error) {
+      console.error("Failed to generate schedule:", error);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  // Approve the schedule and write to Google Calendar
+  async function handleApprove() {
+    setIsApproving(true);
+    try {
+      const response = await fetch("/api/schedule/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blocks: proposedBlocks }),
+      });
+      if (response.ok) {
+        setProposedBlocks([]);
+        setActiveTab("chat");
+      }
+    } catch (error) {
+      console.error("Failed to approve schedule:", error);
+    } finally {
+      setIsApproving(false);
+    }
+  }
+
+  // Handle block changes from drag-and-drop
+  const handleBlocksChange = useCallback((updated: ProposedBlock[]) => {
+    setProposedBlocks(updated);
+  }, []);
+
   return (
     <div className="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
-      {/* Chat — takes up most of the space */}
+      {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <Chat onGoalCreated={handleGoalCreated} />
+        {/* Tab bar */}
+        <div className="flex items-center gap-1 px-4 pt-3 border-b border-[#1e3a5f]">
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
+              activeTab === "chat"
+                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
+                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
+            }`}
+          >
+            💬 Chat
+          </button>
+          <button
+            onClick={() => setActiveTab("schedule")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
+              activeTab === "schedule"
+                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
+                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
+            }`}
+          >
+            📅 Schedule
+            {proposedBlocks.length > 0 && (
+              <span className="ml-2 bg-[#c9a84c] text-[#0a1628] text-xs px-2 py-0.5 rounded-full">
+                {proposedBlocks.length}
+              </span>
+            )}
+          </button>
+
+          {/* Generate schedule button */}
+          {goals.length > 0 && (
+            <button
+              onClick={handleGenerateSchedule}
+              disabled={isGenerating}
+              className="ml-auto mb-1 bg-[#1e3a5f] hover:bg-[#2d4a6f] disabled:bg-[#5a7a9a] text-[#d4c5a0] text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
+            >
+              {isGenerating ? "Generating..." : "⚡ Generate Schedule"}
+            </button>
+          )}
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-hidden">
+          {activeTab === "chat" ? (
+            <Chat onGoalCreated={handleGoalCreated} />
+          ) : (
+            <WeekView
+              blocks={proposedBlocks}
+              weekStart={weekStart}
+              onApprove={handleApprove}
+              onRedo={handleGenerateSchedule}
+              onBlocksChange={handleBlocksChange}
+              isApproving={isApproving}
+            />
+          )}
+        </div>
       </div>
 
       {/* Goals sidebar */}
