@@ -13,6 +13,8 @@ import { useState, useCallback } from "react";
 import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
 import { WeekView } from "@/components/week-view";
+import { DailyReview } from "@/components/daily-review";
+import { PirateShip } from "@/components/pirate-ship";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { ProposedBlock } from "@/lib/scheduler";
 import { Goal } from "@/types/database";
@@ -21,7 +23,7 @@ interface DashboardClientProps {
   initialGoals: Goal[];
 }
 
-type Tab = "chat" | "schedule";
+type Tab = "chat" | "schedule" | "review" | "ship";
 
 export function DashboardClient({ initialGoals }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
@@ -125,6 +127,27 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
             )}
           </button>
 
+          <button
+            onClick={() => setActiveTab("review")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
+              activeTab === "review"
+                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
+                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
+            }`}
+          >
+            ✅ Review
+          </button>
+          <button
+            onClick={() => setActiveTab("ship")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
+              activeTab === "ship"
+                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
+                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
+            }`}
+          >
+            🏴‍☠️ Crew
+          </button>
+
           {/* Generate schedule button */}
           {goals.length > 0 && (
             <button
@@ -139,9 +162,10 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
 
         {/* Tab content */}
         <div className="flex-1 overflow-hidden">
-          {activeTab === "chat" ? (
+          {activeTab === "chat" && (
             <Chat onGoalCreated={handleGoalCreated} />
-          ) : (
+          )}
+          {activeTab === "schedule" && (
             <WeekView
               blocks={proposedBlocks}
               weekStart={weekStart}
@@ -151,6 +175,8 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
               isApproving={isApproving}
             />
           )}
+          {activeTab === "review" && <DailyReview />}
+          {activeTab === "ship" && <PirateShip />}
         </div>
       </div>
 
