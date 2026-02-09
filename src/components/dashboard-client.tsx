@@ -1,20 +1,19 @@
 /**
  * Dashboard Client Component
  *
- * Minimalist layout with tabs: Chat, Schedule, Review, Crew.
+ * Minimalist layout with tabs: Chat, Calendar, Review, Crew.
  * Goals sidebar on the right.
  */
 
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
-import { WeekView } from "@/components/week-view";
+import { CalendarView } from "@/components/calendar-view";
 import { DailyReview } from "@/components/daily-review";
 import { PirateShip } from "@/components/pirate-ship";
 import { ParsedGoal } from "@/lib/parse-goal";
-import { ProposedBlock } from "@/lib/scheduler";
 import { Goal } from "@/types/database";
 import {
   requestNotificationPermission,
@@ -26,15 +25,11 @@ interface DashboardClientProps {
   initialGoals: Goal[];
 }
 
-type Tab = "chat" | "schedule" | "review" | "ship";
+type Tab = "chat" | "calendar" | "review" | "ship";
 
 export function DashboardClient({ initialGoals }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
-  const [proposedBlocks, setProposedBlocks] = useState<ProposedBlock[]>([]);
-  const [weekStart, setWeekStart] = useState<string>("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
 
   // Initialize notifications on mount
   useEffect(() => {
@@ -48,7 +43,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     initNotifications();
   }, []);
 
-  function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>, _scheduledBlocks?: Array<{ start_time: string; end_time: string; calendar_type: string; google_event_id: string }>) {
+  function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>) {
     const newGoal: Goal = {
       id: (savedGoal?.id as string) || crypto.randomUUID(),
       user_id: (savedGoal?.user_id as string) || "",
@@ -68,55 +63,13 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     setGoals((prev) => [...prev, newGoal]);
   }
 
-  async function handleGenerateSchedule() {
-    setIsGenerating(true);
-    try {
-      const response = await fetch("/api/schedule/generate", {
-        method: "POST",
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setProposedBlocks(data.blocks);
-        setWeekStart(data.weekStart);
-        setActiveTab("schedule");
-      }
-    } catch (error) {
-      console.error("Failed to generate schedule:", error);
-    } finally {
-      setIsGenerating(false);
-    }
-  }
-
-  async function handleApprove() {
-    setIsApproving(true);
-    try {
-      const response = await fetch("/api/schedule/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blocks: proposedBlocks }),
-      });
-      if (response.ok) {
-        setProposedBlocks([]);
-        setActiveTab("chat");
-      }
-    } catch (error) {
-      console.error("Failed to approve schedule:", error);
-    } finally {
-      setIsApproving(false);
-    }
-  }
-
-  const handleBlocksChange = useCallback((updated: ProposedBlock[]) => {
-    setProposedBlocks(updated);
-  }, []);
-
   return (
     <div className="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
         <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100">
-          {(["chat", "schedule", "review", "ship"] as Tab[]).map((tab) => (
+          {(["chat", "calendar", "review", "ship"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -127,31 +80,11 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
               }`}
             >
               {tab === "chat" && "Chat"}
-              {tab === "schedule" && (
-                <>
-                  Schedule
-                  {proposedBlocks.length > 0 && (
-                    <span className="ml-2 bg-gray-900 text-white text-xs px-1.5 py-0.5 rounded-full">
-                      {proposedBlocks.length}
-                    </span>
-                  )}
-                </>
-              )}
+              {tab === "calendar" && "Calendar"}
               {tab === "review" && "Review"}
               {tab === "ship" && "Crew"}
             </button>
           ))}
-
-          {/* Generate schedule button */}
-          {goals.length > 0 && (
-            <button
-              onClick={handleGenerateSchedule}
-              disabled={isGenerating}
-              className="ml-auto mb-1 bg-gray-900 hover:bg-gray-700 disabled:bg-gray-300 text-white text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
-            >
-              {isGenerating ? "Generating..." : "Generate Schedule"}
-            </button>
-          )}
         </div>
 
         {/* Tab content */}
@@ -159,16 +92,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
           {activeTab === "chat" && (
             <Chat onGoalCreated={handleGoalCreated} />
           )}
-          {activeTab === "schedule" && (
-            <WeekView
-              blocks={proposedBlocks}
-              weekStart={weekStart}
-              onApprove={handleApprove}
-              onRedo={handleGenerateSchedule}
-              onBlocksChange={handleBlocksChange}
-              isApproving={isApproving}
-            />
-          )}
+          {activeTab === "calendar" && <CalendarView />}
           {activeTab === "review" && <DailyReview />}
           {activeTab === "ship" && <PirateShip />}
         </div>
