@@ -1,26 +1,80 @@
 @import "tailwindcss";
 
+/**
+ * First Mate — Nautical Theme
+ *
+ * Color palette:
+ * - Deep navy:    #0a1628 (background)
+ * - Navy mid:     #112240 (cards, panels)
+ * - Navy border:  #1e3a5f (borders, dividers)
+ * - Gold:         #c9a84c (accents, headers)
+ * - Cream:        #d4c5a0 (body text)
+ * - Slate:        #5a7a9a (muted text)
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a1628;
+  --foreground: #d4c5a0;
+  --gold: #c9a84c;
+  --navy-mid: #112240;
+  --navy-border: #1e3a5f;
+  --slate: #5a7a9a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-playfair);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Heading styles use the serif font */
+h1, h2, h3 {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+
+/* Custom scrollbar for the nautical feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--navy-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--slate);
+}
+
+/* Fade-in animation for pirate celebrations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Selection color */
+::selection {
+  background: #c9a84c40;
+  color: #d4c5a0;
 }
