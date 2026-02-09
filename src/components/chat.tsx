@@ -17,7 +17,7 @@ interface Message {
 }
 
 interface ChatProps {
-  onGoalCreated?: (goal: ParsedGoal) => void;
+  onGoalCreated?: (goal: ParsedGoal, savedGoal?: Record<string, unknown>) => void;
 }
 
 export function Chat({ onGoalCreated }: ChatProps) {
@@ -115,7 +115,9 @@ export function Chat({ onGoalCreated }: ChatProps) {
             });
 
             if (saveResponse.ok) {
-              onGoalCreated(goal);
+              const savedData = await saveResponse.json();
+              // Pass the DB-returned goal (with real ID) if available
+              onGoalCreated(goal, savedData.goal);
             }
           } catch {
             // Goal save failed silently — user can retry via chat

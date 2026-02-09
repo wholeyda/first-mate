@@ -50,10 +50,11 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     initNotifications();
   }, []);
 
-  function handleGoalCreated(parsedGoal: ParsedGoal) {
+  function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>) {
+    // Use the DB-returned goal if available (has real ID), fall back to parsed data
     const newGoal: Goal = {
-      id: crypto.randomUUID(),
-      user_id: "",
+      id: (savedGoal?.id as string) || crypto.randomUUID(),
+      user_id: (savedGoal?.user_id as string) || "",
       title: parsedGoal.title,
       description: parsedGoal.description,
       due_date: parsedGoal.due_date,
@@ -65,7 +66,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
       preferred_time: parsedGoal.preferred_time,
       duration_minutes: parsedGoal.duration_minutes,
       recurring: parsedGoal.recurring,
-      created_at: new Date().toISOString(),
+      created_at: (savedGoal?.created_at as string) || new Date().toISOString(),
     };
     setGoals((prev) => [...prev, newGoal]);
   }

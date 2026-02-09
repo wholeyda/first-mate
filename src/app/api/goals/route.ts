@@ -34,8 +34,12 @@ function validateGoal(goal: GoalBody): string | null {
   if (!goal.due_date || typeof goal.due_date !== "string") {
     return "due_date is required";
   }
-  if (typeof goal.estimated_hours !== "number" || goal.estimated_hours <= 0) {
-    return "estimated_hours must be a positive number";
+  // Validate due_date is a parseable date
+  if (isNaN(new Date(goal.due_date).getTime())) {
+    return "due_date must be a valid date (YYYY-MM-DD)";
+  }
+  if (typeof goal.estimated_hours !== "number" || !isFinite(goal.estimated_hours) || goal.estimated_hours <= 0) {
+    return "estimated_hours must be a finite positive number";
   }
   if (typeof goal.is_hard_deadline !== "boolean") {
     return "is_hard_deadline must be a boolean";
@@ -45,6 +49,10 @@ function validateGoal(goal: GoalBody): string | null {
   }
   if (typeof goal.is_work !== "boolean") {
     return "is_work must be a boolean";
+  }
+  // Validate description type if provided
+  if (goal.description !== null && goal.description !== undefined && typeof goal.description !== "string") {
+    return "description must be a string or null";
   }
   // Validate preferred_time format if provided
   if (goal.preferred_time !== null && goal.preferred_time !== undefined) {
@@ -59,8 +67,8 @@ function validateGoal(goal: GoalBody): string | null {
   }
   // Validate duration_minutes if provided
   if (goal.duration_minutes !== null && goal.duration_minutes !== undefined) {
-    if (typeof goal.duration_minutes !== "number" || goal.duration_minutes < 15) {
-      return "duration_minutes must be at least 15";
+    if (typeof goal.duration_minutes !== "number" || !isFinite(goal.duration_minutes) || goal.duration_minutes < 15) {
+      return "duration_minutes must be a finite number of at least 15";
     }
   }
   // Validate recurring if provided

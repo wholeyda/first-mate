@@ -35,7 +35,7 @@ export function SuggestionsPanel() {
         const response = await fetch("/api/suggestions");
         if (response.ok) {
           const data = await response.json();
-          setSuggestions(data.suggestions);
+          setSuggestions(data.suggestions || []);
         }
       } catch (error) {
         console.error("Failed to fetch suggestions:", error);

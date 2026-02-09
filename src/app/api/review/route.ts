@@ -134,14 +134,18 @@ export async function POST(request: NextRequest) {
 
         if (fetchError || !block || block.is_completed) continue;
 
-        // Mark as completed
-        const { error: updateError } = await supabase
+        // Mark as completed — use conditional update to prevent race condition
+        // Only updates if is_completed is still false (prevents double-points)
+        const { data: updatedRows, error: updateError } = await supabase
           .from("scheduled_blocks")
           .update({ is_completed: true })
-          .eq("id", blockId);
+          .eq("id", blockId)
+          .eq("is_completed", false)
+          .select();
 
-        if (updateError) {
-          blockErrors.push(`Failed to mark block ${blockId} complete`);
+        if (updateError || !updatedRows || updatedRows.length === 0) {
+          // Either failed or another request already completed this block
+          if (updateError) blockErrors.push(`Failed to mark block ${blockId} complete`);
           continue; // Don't award points if we couldn't mark complete
         }
 

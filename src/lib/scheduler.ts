@@ -62,10 +62,6 @@ function hasConflict(start: Date, end: Date, busySlots: BusySlot[]): boolean {
 }
 
 /**
- * Main scheduling function.
- * Takes goals and busy slots, returns proposed time blocks for the week.
- */
-/**
  * Validate preferred_time format (HH:MM, 00-23:00-59).
  * Returns [hours, minutes] if valid, null otherwise.
  */
@@ -79,6 +75,10 @@ function parsePreferredTime(time: string | null | undefined): [number, number] |
   return [hours, minutes];
 }
 
+/**
+ * Main scheduling function.
+ * Takes goals and busy slots, returns proposed time blocks for the week.
+ */
 export function generateSchedule(
   goals: Goal[],
   busySlots: BusySlot[],
@@ -106,7 +106,7 @@ export function generateSchedule(
 
   for (const goal of sortedGoals) {
     const calendarType: "work" | "personal" = goal.is_work ? "work" : "personal";
-    const durationMinutes = goal.duration_minutes || goal.estimated_hours * 60;
+    const durationMinutes = goal.duration_minutes ?? goal.estimated_hours * 60;
 
     // --- RECURRING TASKS with preferred time ---
     if (goal.recurring && goal.preferred_time) {

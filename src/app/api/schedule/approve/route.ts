@@ -52,6 +52,26 @@ export async function POST(request: NextRequest) {
     const errors = [];
 
     for (const block of blocks) {
+      // Validate block fields before processing
+      if (
+        !block.goal_id ||
+        !block.goal_title ||
+        !block.start_time ||
+        !block.end_time ||
+        !["work", "personal"].includes(block.calendar_type)
+      ) {
+        errors.push({ block: block.goal_title || "unknown", stage: "validation" });
+        continue;
+      }
+
+      // Validate times are parseable
+      const blockStartDate = new Date(block.start_time);
+      const blockEndDate = new Date(block.end_time);
+      if (isNaN(blockStartDate.getTime()) || isNaN(blockEndDate.getTime()) || blockEndDate <= blockStartDate) {
+        errors.push({ block: block.goal_title, stage: "validation" });
+        continue;
+      }
+
       // Determine which calendar to write to
       const calendarId =
         block.calendar_type === "work" ? workId : personalId;
