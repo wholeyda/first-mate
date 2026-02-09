@@ -25,12 +25,12 @@ interface Point3D {
   z: number;
 }
 
-// Globe configuration
-const NUM_POINTS = 900;
-const SPHERE_RADIUS = 120; // Visual radius in CSS pixels
-const FOCAL_LENGTH = 400;
-const CANVAS_SIZE = 600; // Internal canvas resolution (2x for retina)
-const CSS_SIZE = 300; // CSS display size
+// Globe configuration (3x scale)
+const NUM_POINTS = 2500;
+const SPHERE_RADIUS = 360; // Visual radius in CSS pixels
+const FOCAL_LENGTH = 1200;
+const CANVAS_SIZE = 1800; // Internal canvas resolution (2x for retina)
+const CSS_SIZE = 900; // CSS display size
 const CENTER = CANVAS_SIZE / 2;
 
 // Rotation speeds (radians per frame)
@@ -38,10 +38,10 @@ const IDLE_SPEED = 0.003;
 const ACTIVE_SPEED = 0.015;
 const SPEED_LERP = 0.04; // How fast to transition between speeds
 
-// Glow settings
-const IDLE_GLOW = 6;
-const ACTIVE_GLOW_MIN = 8;
-const ACTIVE_GLOW_MAX = 22;
+// Glow settings (3x scale)
+const IDLE_GLOW = 18;
+const ACTIVE_GLOW_MIN = 24;
+const ACTIVE_GLOW_MAX = 66;
 const GLOW_LERP = 0.06;
 
 /**
@@ -173,7 +173,7 @@ export function Globe({ isActive }: GlobeProps) {
           depth: finalZ,
           depthNorm,
           originalY: p.y,
-          size: 0.6 + depthNorm * 1.6, // 0.6px to 2.2px
+          size: 1.8 + depthNorm * 4.8, // 1.8px to 6.6px (3x scale)
           alpha: 0.1 + depthNorm * 0.7, // 0.1 to 0.8
         };
       });
@@ -217,7 +217,7 @@ export function Globe({ isActive }: GlobeProps) {
         ref={canvasRef}
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
-        className="w-[300px] h-[300px]"
+        className="w-[900px] h-[900px]"
       />
     </div>
   );
