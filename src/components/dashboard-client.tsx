@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
 import { WeekView } from "@/components/week-view";
@@ -18,6 +18,11 @@ import { PirateShip } from "@/components/pirate-ship";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { ProposedBlock } from "@/lib/scheduler";
 import { Goal } from "@/types/database";
+import {
+  requestNotificationPermission,
+  registerServiceWorker,
+  scheduleAllNotifications,
+} from "@/lib/notifications";
 
 interface DashboardClientProps {
   initialGoals: Goal[];
@@ -32,6 +37,18 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
   const [weekStart, setWeekStart] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+
+  // Initialize notifications on mount
+  useEffect(() => {
+    async function initNotifications() {
+      const granted = await requestNotificationPermission();
+      if (granted) {
+        await registerServiceWorker();
+        scheduleAllNotifications();
+      }
+    }
+    initNotifications();
+  }, []);
 
   function handleGoalCreated(parsedGoal: ParsedGoal) {
     const newGoal: Goal = {

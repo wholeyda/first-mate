@@ -8,6 +8,7 @@
 "use client";
 
 import { Goal } from "@/types/database";
+import { SuggestionsPanel } from "@/components/suggestions-panel";
 
 interface GoalsSidebarProps {
   goals: Goal[];
@@ -77,6 +78,11 @@ export function GoalsSidebar({ goals }: GoalsSidebarProps) {
               </div>
             );
           })}
+      </div>
+
+      {/* Suggestions */}
+      <div className="border-t border-[#1e3a5f]">
+        <SuggestionsPanel />
       </div>
     </aside>
   );
