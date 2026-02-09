@@ -1,8 +1,7 @@
 /**
  * Dashboard Page
  *
- * Main app screen after login. Contains the chat interface
- * and a sidebar showing active goals. Server component that
+ * Main app screen after login. Server component that
  * checks auth, then renders client components.
  */
 
@@ -33,13 +32,13 @@ export default async function DashboardPage() {
     .order("priority", { ascending: false });
 
   return (
-    <div className="min-h-screen bg-[#0a1628] flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Top bar */}
-      <header className="border-b border-[#1e3a5f] px-6 py-4">
+      <header className="border-b border-gray-100 px-6 py-3">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <h1 className="text-2xl font-bold text-[#c9a84c]">⚓ First Mate</h1>
+          <h1 className="text-lg font-semibold text-gray-900">First Mate</h1>
           <div className="flex items-center gap-4">
-            <span className="text-[#d4c5a0] text-sm">{user.email}</span>
+            <span className="text-gray-400 text-sm">{user.email}</span>
             <SignOutButton />
           </div>
         </div>

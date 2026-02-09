@@ -1,10 +1,9 @@
 /**
  * Pirate Ship Component
  *
- * Displays the pirate ship(s) with crew members aboard.
- * Each completed task adds a pirate to the ship.
- * When the ship exceeds capacity (12 pirates), a second ship appears.
- * Pirates reset monthly.
+ * Minimalist crew display. Each completed task adds a crew member.
+ * When the ship exceeds capacity (12), a second group appears.
+ * Crew resets monthly.
  */
 
 "use client";
@@ -12,10 +11,8 @@
 import { useState, useEffect } from "react";
 import { Pirate } from "@/types/database";
 
-// Ship capacity before overflow
 const SHIP_CAPACITY = 12;
 
-// Pirate emoji/visual based on image_key
 const PIRATE_VISUALS: Record<string, string> = {
   scholar: "📚",
   librarian: "🔭",
@@ -62,54 +59,52 @@ export function PirateShip() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-[#5a7a9a]">
-        Loading your fleet...
+      <div className="flex items-center justify-center h-full text-gray-400">
+        Loading...
       </div>
     );
   }
 
-  // Split pirates into ships
   const ship1Pirates = pirates.slice(0, SHIP_CAPACITY);
   const ship2Pirates = pirates.slice(SHIP_CAPACITY);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Score and stats */}
+    <div className="p-6 max-w-4xl mx-auto bg-white">
+      {/* Score */}
       <div className="text-center mb-8">
-        <p className="text-[#5a7a9a] text-sm mb-1">Monthly Score</p>
-        <p className="text-4xl font-bold text-[#c9a84c]">{score}</p>
-        <p className="text-[#5a7a9a] text-sm mt-2">
-          {pirates.length} crew member{pirates.length !== 1 ? "s" : ""} aboard
+        <p className="text-gray-400 text-sm mb-1">Monthly Score</p>
+        <p className="text-4xl font-bold text-gray-900">{score}</p>
+        <p className="text-gray-400 text-sm mt-2">
+          {pirates.length} crew member{pirates.length !== 1 ? "s" : ""}
         </p>
       </div>
 
       {/* Ship 1 */}
-      <div className="bg-[#112240] border border-[#1e3a5f] rounded-2xl p-6 mb-6">
+      <div className="border border-gray-100 rounded-xl p-6 mb-6">
         <div className="text-center mb-4">
-          <p className="text-3xl mb-2">🚢</p>
-          <p className="text-[#c9a84c] font-semibold">
-            {pirates.length === 0 ? "Your Ship Awaits" : "The First Mate"}
+          <p className="text-gray-900 font-medium">
+            {pirates.length === 0 ? "Your crew awaits" : "The First Mate"}
           </p>
-          <p className="text-[#5a7a9a] text-xs">
+          <p className="text-gray-400 text-xs">
             {ship1Pirates.length}/{SHIP_CAPACITY} crew
           </p>
         </div>
 
         {ship1Pirates.length === 0 ? (
-          <p className="text-center text-[#5a7a9a] text-sm py-4">
-            Complete tasks to recruit your crew!
+          <p className="text-center text-gray-400 text-sm py-4">
+            Complete tasks to recruit your crew.
           </p>
         ) : (
           <div className="grid grid-cols-4 gap-3">
             {ship1Pirates.map((pirate) => (
               <div
                 key={pirate.id}
-                className="flex flex-col items-center gap-1 bg-[#0d1f3c] rounded-xl p-3 border border-[#1e3a5f]"
+                className="flex flex-col items-center gap-1 border border-gray-50 rounded-lg p-3"
               >
                 <span className="text-2xl">
                   {PIRATE_VISUALS[pirate.image_key] || "⛵"}
                 </span>
-                <p className="text-[#d4c5a0] text-xs text-center leading-tight">
+                <p className="text-gray-600 text-xs text-center leading-tight">
                   {pirate.trait_description}
                 </p>
               </div>
@@ -120,11 +115,10 @@ export function PirateShip() {
 
       {/* Ship 2 (overflow) */}
       {ship2Pirates.length > 0 && (
-        <div className="bg-[#112240] border border-[#1e3a5f] rounded-2xl p-6">
+        <div className="border border-gray-100 rounded-xl p-6">
           <div className="text-center mb-4">
-            <p className="text-3xl mb-2">⛵</p>
-            <p className="text-[#c9a84c] font-semibold">The Second Wind</p>
-            <p className="text-[#5a7a9a] text-xs">
+            <p className="text-gray-900 font-medium">The Second Wind</p>
+            <p className="text-gray-400 text-xs">
               {ship2Pirates.length}/{SHIP_CAPACITY} crew
             </p>
           </div>
@@ -132,12 +126,12 @@ export function PirateShip() {
             {ship2Pirates.map((pirate) => (
               <div
                 key={pirate.id}
-                className="flex flex-col items-center gap-1 bg-[#0d1f3c] rounded-xl p-3 border border-[#1e3a5f]"
+                className="flex flex-col items-center gap-1 border border-gray-50 rounded-lg p-3"
               >
                 <span className="text-2xl">
                   {PIRATE_VISUALS[pirate.image_key] || "⛵"}
                 </span>
-                <p className="text-[#d4c5a0] text-xs text-center leading-tight">
+                <p className="text-gray-600 text-xs text-center leading-tight">
                   {pirate.trait_description}
                 </p>
               </div>

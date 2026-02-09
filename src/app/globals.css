@@ -1,24 +1,14 @@
 @import "tailwindcss";
 
 /**
- * First Mate — Nautical Theme
+ * First Mate — Minimalist Theme
  *
- * Color palette:
- * - Deep navy:    #0a1628 (background)
- * - Navy mid:     #112240 (cards, panels)
- * - Navy border:  #1e3a5f (borders, dividers)
- * - Gold:         #c9a84c (accents, headers)
- * - Cream:        #d4c5a0 (body text)
- * - Slate:        #5a7a9a (muted text)
+ * Black, white, and incredibly simple.
  */
 
 :root {
-  --background: #0a1628;
-  --foreground: #d4c5a0;
-  --gold: #c9a84c;
-  --navy-mid: #112240;
-  --navy-border: #1e3a5f;
-  --slate: #5a7a9a;
+  --background: #ffffff;
+  --foreground: #111111;
 }
 
 @theme inline {
@@ -34,30 +24,30 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
 }
 
-/* Heading styles use the serif font */
+/* Heading styles */
 h1, h2, h3 {
-  font-family: var(--font-playfair), Georgia, serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
 
-/* Custom scrollbar for the nautical feel */
+/* Minimal scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--navy-border);
-  border-radius: 4px;
+  background: #d1d5db;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--slate);
+  background: #9ca3af;
 }
 
-/* Fade-in animation for pirate celebrations */
+/* Fade-in animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -73,8 +63,25 @@ h1, h2, h3 {
   animation: fadeIn 0.5s ease-out;
 }
 
+/* Chat message fade-in animation */
+@keyframes chatMessageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-message-fade {
+  animation: chatMessageFadeIn 0.6s ease-out;
+  transition: opacity 0.8s ease-in-out;
+}
+
 /* Selection color */
 ::selection {
-  background: #c9a84c40;
-  color: #d4c5a0;
+  background: rgba(0, 0, 0, 0.1);
+  color: #111111;
 }

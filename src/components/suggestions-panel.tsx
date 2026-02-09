@@ -1,8 +1,8 @@
 /**
  * Suggestions Panel
  *
- * Displays "Captain's Recommendations" — curated resources
- * matched to the user's active goals. Shown in the goals sidebar.
+ * Displays curated resources matched to the user's active goals.
+ * Shown in the goals sidebar.
  */
 
 "use client";
@@ -19,10 +19,10 @@ interface Suggestion {
 }
 
 const TYPE_ICONS: Record<string, string> = {
-  video: "🎬",
-  article: "📄",
-  tool: "🔧",
-  course: "🎓",
+  video: "▶",
+  article: "◻",
+  tool: "⚙",
+  course: "○",
 };
 
 export function SuggestionsPanel() {
@@ -49,20 +49,20 @@ export function SuggestionsPanel() {
   if (isLoading) {
     return (
       <div className="px-4 pb-4">
-        <h3 className="text-sm font-semibold text-[#c9a84c] mb-3">
-          Captain&apos;s Recommendations
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">
+          Recommendations
         </h3>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-[#112240] border border-[#1e3a5f] rounded-xl p-3 animate-pulse"
+              className="border border-gray-100 rounded-xl p-3 animate-pulse"
             >
               <div className="flex items-start gap-2">
-                <div className="w-4 h-4 bg-[#1e3a5f] rounded" />
+                <div className="w-4 h-4 bg-gray-100 rounded" />
                 <div className="flex-1">
-                  <div className="h-3 bg-[#1e3a5f] rounded w-3/4 mb-1.5" />
-                  <div className="h-2.5 bg-[#1e3a5f] rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 rounded w-3/4 mb-1.5" />
+                  <div className="h-2.5 bg-gray-100 rounded w-1/2" />
                 </div>
               </div>
             </div>
@@ -76,8 +76,8 @@ export function SuggestionsPanel() {
 
   return (
     <div className="px-4 pb-4">
-      <h3 className="text-sm font-semibold text-[#c9a84c] mb-3">
-        Captain&apos;s Recommendations
+      <h3 className="text-sm font-semibold text-gray-900 mb-3">
+        Recommendations
       </h3>
       <div className="space-y-2">
         {suggestions.map((suggestion, index) => (
@@ -86,18 +86,18 @@ export function SuggestionsPanel() {
             href={suggestion.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block bg-[#112240] border border-[#1e3a5f] rounded-xl p-3 hover:border-[#c9a84c]/50 transition-colors"
+            className="block border border-gray-100 rounded-xl p-3 hover:border-gray-300 transition-colors"
           >
             <div className="flex items-start gap-2">
-              <span className="text-sm">
-                {TYPE_ICONS[suggestion.type] || "📌"}
+              <span className="text-sm text-gray-400">
+                {TYPE_ICONS[suggestion.type] || "·"}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-[#d4c5a0] text-xs font-medium truncate">
+                <p className="text-gray-900 text-xs font-medium truncate">
                   {suggestion.title}
                 </p>
-                <p className="text-[#5a7a9a] text-xs mt-0.5">
-                  {suggestion.timeEstimate} •{" "}
+                <p className="text-gray-400 text-xs mt-0.5">
+                  {suggestion.timeEstimate} ·{" "}
                   For: {suggestion.goalTitle}
                 </p>
               </div>

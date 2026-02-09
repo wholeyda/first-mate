@@ -1,9 +1,8 @@
 /**
  * Daily Review Component
  *
- * End-of-day review screen where users mark tasks as complete.
- * Shows today's blocks with checkboxes, calculates points earned,
- * and displays new pirates spawned.
+ * Minimalist end-of-day review. Mark tasks complete,
+ * earn points, spawn crew members.
  */
 
 "use client";
@@ -38,7 +37,6 @@ export function DailyReview() {
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch today's blocks on mount
   useEffect(() => {
     async function fetchReview() {
       try {
@@ -86,7 +84,6 @@ export function DailyReview() {
         const data = await response.json();
         setResult(data);
         setScore((prev) => prev + data.pointsEarned);
-        // Mark blocks as completed in UI
         setBlocks((prev) =>
           prev.map((b) =>
             selectedIds.has(b.id) ? { ...b, is_completed: true } : b
@@ -103,8 +100,8 @@ export function DailyReview() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-[#5a7a9a]">
-        Loading today&apos;s schedule...
+      <div className="flex items-center justify-center h-full text-gray-400">
+        Loading...
       </div>
     );
   }
@@ -113,27 +110,26 @@ export function DailyReview() {
   const completedBlocks = blocks.filter((b) => b.is_completed);
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      {/* Score display */}
+    <div className="p-6 max-w-2xl mx-auto bg-white">
+      {/* Score */}
       <div className="text-center mb-8">
-        <p className="text-[#5a7a9a] text-sm mb-1">Monthly Score</p>
-        <p className="text-4xl font-bold text-[#c9a84c]">{score}</p>
-        <p className="text-[#5a7a9a] text-xs">points</p>
+        <p className="text-gray-400 text-sm mb-1">Monthly Score</p>
+        <p className="text-4xl font-bold text-gray-900">{score}</p>
       </div>
 
-      {/* New pirate celebration */}
+      {/* New crew celebration */}
       {result && result.piratesSpawned.length > 0 && (
-        <div className="bg-[#1e3a5f]/50 border border-[#c9a84c] rounded-2xl p-6 mb-6 text-center animate-fadeIn">
-          <p className="text-[#c9a84c] text-lg font-semibold mb-2">
-            🏴‍☠️ New crew members aboard!
+        <div className="border border-gray-200 rounded-xl p-6 mb-6 text-center animate-fadeIn">
+          <p className="text-gray-900 text-lg font-semibold mb-2">
+            New crew members!
           </p>
-          <p className="text-[#d4c5a0] text-2xl font-bold mb-3">
+          <p className="text-gray-900 text-2xl font-bold mb-3">
             +{result.pointsEarned} points
           </p>
           {result.piratesSpawned.map((pirate, i) => (
-            <p key={i} className="text-[#d4c5a0] text-sm">
-              A <span className="text-[#c9a84c] font-medium">{pirate.trait}</span>{" "}
-              joins for completing &quot;{pirate.goal_title}&quot;
+            <p key={i} className="text-gray-600 text-sm">
+              <span className="font-medium text-gray-900">{pirate.trait}</span>{" "}
+              joined for &quot;{pirate.goal_title}&quot;
             </p>
           ))}
         </div>
@@ -142,26 +138,26 @@ export function DailyReview() {
       {/* Incomplete blocks */}
       {incompleteBlocks.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-[#d4c5a0] font-semibold mb-3">
+          <h3 className="text-gray-900 font-medium mb-3 text-sm">
             Today&apos;s Tasks
           </h3>
           <div className="space-y-2">
             {incompleteBlocks.map((block) => (
               <label
                 key={block.id}
-                className="flex items-center gap-3 bg-[#112240] border border-[#1e3a5f] rounded-xl p-4 cursor-pointer hover:border-[#c9a84c]/50 transition-colors"
+                className="flex items-center gap-3 border border-gray-100 rounded-lg p-4 cursor-pointer hover:border-gray-300 transition-colors"
               >
                 <input
                   type="checkbox"
                   checked={selectedIds.has(block.id)}
                   onChange={() => toggleBlock(block.id)}
-                  className="w-5 h-5 rounded accent-[#c9a84c]"
+                  className="w-4 h-4 rounded accent-gray-900"
                 />
                 <div className="flex-1">
-                  <p className="text-[#d4c5a0] text-sm font-medium">
+                  <p className="text-gray-900 text-sm font-medium">
                     {block.goals?.title || "Task"}
                   </p>
-                  <p className="text-[#5a7a9a] text-xs">
+                  <p className="text-gray-400 text-xs">
                     {new Date(block.start_time).toLocaleTimeString([], {
                       hour: "numeric",
                       minute: "2-digit",
@@ -171,10 +167,10 @@ export function DailyReview() {
                       hour: "numeric",
                       minute: "2-digit",
                     })}
-                    {block.goals?.is_work ? " • Work" : " • Personal"}
+                    {block.goals?.is_work ? " · Work" : " · Personal"}
                   </p>
                 </div>
-                <span className="text-[#5a7a9a] text-xs">
+                <span className="text-gray-400 text-xs">
                   +
                   {Math.floor(
                     (new Date(block.end_time).getTime() -
@@ -190,7 +186,7 @@ export function DailyReview() {
           <button
             onClick={handleSubmit}
             disabled={selectedIds.size === 0 || isSubmitting}
-            className="w-full mt-4 bg-[#c9a84c] hover:bg-[#b8973d] disabled:bg-[#5a7a9a] disabled:cursor-not-allowed text-[#0a1628] font-semibold py-3 rounded-xl transition-colors cursor-pointer"
+            className="w-full mt-4 bg-gray-900 hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors cursor-pointer text-sm"
           >
             {isSubmitting
               ? "Completing..."
@@ -202,15 +198,15 @@ export function DailyReview() {
       {/* Completed blocks */}
       {completedBlocks.length > 0 && (
         <div>
-          <h3 className="text-[#5a7a9a] font-semibold mb-3">Completed</h3>
+          <h3 className="text-gray-400 font-medium mb-3 text-sm">Completed</h3>
           <div className="space-y-2">
             {completedBlocks.map((block) => (
               <div
                 key={block.id}
-                className="flex items-center gap-3 bg-[#0d1f3c] border border-[#1e3a5f]/50 rounded-xl p-4 opacity-60"
+                className="flex items-center gap-3 border border-gray-50 rounded-lg p-4 opacity-50"
               >
-                <span className="text-[#c9a84c]">✓</span>
-                <p className="text-[#d4c5a0] text-sm line-through">
+                <span className="text-gray-400">✓</span>
+                <p className="text-gray-500 text-sm line-through">
                   {block.goals?.title || "Task"}
                 </p>
               </div>
@@ -220,9 +216,9 @@ export function DailyReview() {
       )}
 
       {blocks.length === 0 && (
-        <div className="text-center text-[#5a7a9a] py-8">
+        <div className="text-center text-gray-400 py-8">
           <p>No tasks scheduled for today.</p>
-          <p className="text-sm mt-1">Use the chat to add some goals!</p>
+          <p className="text-sm mt-1">Use the chat to add some goals.</p>
         </div>
       )}
     </div>

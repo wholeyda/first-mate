@@ -1,10 +1,8 @@
 /**
  * Dashboard Client Component
  *
- * Main layout with two tabs: Chat and Schedule.
- * - Chat tab: talk to First Mate, create goals
- * - Schedule tab: view/approve the weekly calendar
- * Goals sidebar is always visible.
+ * Minimalist layout with tabs: Chat, Schedule, Review, Crew.
+ * Goals sidebar on the right.
  */
 
 "use client";
@@ -51,7 +49,6 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
   }, []);
 
   function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>) {
-    // Use the DB-returned goal if available (has real ID), fall back to parsed data
     const newGoal: Goal = {
       id: (savedGoal?.id as string) || crypto.randomUUID(),
       user_id: (savedGoal?.user_id as string) || "",
@@ -71,7 +68,6 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     setGoals((prev) => [...prev, newGoal]);
   }
 
-  // Generate the weekly schedule
   async function handleGenerateSchedule() {
     setIsGenerating(true);
     try {
@@ -91,7 +87,6 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     }
   }
 
-  // Approve the schedule and write to Google Calendar
   async function handleApprove() {
     setIsApproving(true);
     try {
@@ -111,7 +106,6 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     }
   }
 
-  // Handle block changes from drag-and-drop
   const handleBlocksChange = useCallback((updated: ProposedBlock[]) => {
     setProposedBlocks(updated);
   }, []);
@@ -121,62 +115,41 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
-        <div className="flex items-center gap-1 px-4 pt-3 border-b border-[#1e3a5f]">
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
-              activeTab === "chat"
-                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
-                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
-            }`}
-          >
-            💬 Chat
-          </button>
-          <button
-            onClick={() => setActiveTab("schedule")}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
-              activeTab === "schedule"
-                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
-                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
-            }`}
-          >
-            📅 Schedule
-            {proposedBlocks.length > 0 && (
-              <span className="ml-2 bg-[#c9a84c] text-[#0a1628] text-xs px-2 py-0.5 rounded-full">
-                {proposedBlocks.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("review")}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
-              activeTab === "review"
-                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
-                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
-            }`}
-          >
-            ✅ Review
-          </button>
-          <button
-            onClick={() => setActiveTab("ship")}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors cursor-pointer ${
-              activeTab === "ship"
-                ? "bg-[#112240] text-[#c9a84c] border border-[#1e3a5f] border-b-0"
-                : "text-[#5a7a9a] hover:text-[#d4c5a0]"
-            }`}
-          >
-            🏴‍☠️ Crew
-          </button>
+        <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100">
+          {(["chat", "schedule", "review", "ship"] as Tab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === tab
+                  ? "text-gray-900 border-b-2 border-gray-900"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              {tab === "chat" && "Chat"}
+              {tab === "schedule" && (
+                <>
+                  Schedule
+                  {proposedBlocks.length > 0 && (
+                    <span className="ml-2 bg-gray-900 text-white text-xs px-1.5 py-0.5 rounded-full">
+                      {proposedBlocks.length}
+                    </span>
+                  )}
+                </>
+              )}
+              {tab === "review" && "Review"}
+              {tab === "ship" && "Crew"}
+            </button>
+          ))}
 
           {/* Generate schedule button */}
           {goals.length > 0 && (
             <button
               onClick={handleGenerateSchedule}
               disabled={isGenerating}
-              className="ml-auto mb-1 bg-[#1e3a5f] hover:bg-[#2d4a6f] disabled:bg-[#5a7a9a] text-[#d4c5a0] text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
+              className="ml-auto mb-1 bg-gray-900 hover:bg-gray-700 disabled:bg-gray-300 text-white text-sm px-4 py-1.5 rounded-lg transition-colors cursor-pointer"
             >
-              {isGenerating ? "Generating..." : "⚡ Generate Schedule"}
+              {isGenerating ? "Generating..." : "Generate Schedule"}
             </button>
           )}
         </div>
