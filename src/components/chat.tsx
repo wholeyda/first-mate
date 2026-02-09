@@ -122,7 +122,19 @@ export function Chat({ onGoalCreated }: ChatProps) {
               body: JSON.stringify({ goal }),
             });
 
-            if (saveResponse.ok) {
+            if (saveResponse.status === 409) {
+              // Duplicate goal — inform the user
+              const dupData = await saveResponse.json();
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: updated[updated.length - 1].content +
+                    `\n\n(A goal called "${dupData.existingGoal?.title || goal.title}" already exists — skipped duplicate.)`,
+                };
+                return updated;
+              });
+            } else if (saveResponse.ok) {
               const savedData = await saveResponse.json();
               onGoalCreated(goal, savedData.goal, savedData.scheduledBlocks);
 

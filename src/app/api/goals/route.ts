@@ -113,6 +113,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
+    // Check for duplicate goal (case-insensitive title match)
+    const { data: existingGoal } = await supabase
+      .from("goals")
+      .select("id, title")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .ilike("title", goal.title.trim())
+      .maybeSingle();
+
+    if (existingGoal) {
+      return NextResponse.json(
+        {
+          error: "duplicate",
+          existingGoal,
+          message: `A goal titled "${existingGoal.title}" already exists`,
+        },
+        { status: 409 }
+      );
+    }
+
     // Insert into database
     const { data, error } = await supabase
       .from("goals")
