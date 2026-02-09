@@ -62,6 +62,9 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
       priority: parsedGoal.priority,
       is_work: parsedGoal.is_work,
       status: "active",
+      preferred_time: parsedGoal.preferred_time,
+      duration_minutes: parsedGoal.duration_minutes,
+      recurring: parsedGoal.recurring,
       created_at: new Date().toISOString(),
     };
     setGoals((prev) => [...prev, newGoal]);

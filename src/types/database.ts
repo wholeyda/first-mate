@@ -26,6 +26,9 @@ export interface Goal {
   priority: 1 | 2 | 3 | 4 | 5;
   is_work: boolean;
   status: "active" | "completed" | "archived";
+  preferred_time: string | null;
+  duration_minutes: number | null;
+  recurring: { type: string; days: string[] } | null;
   created_at: string;
 }
 

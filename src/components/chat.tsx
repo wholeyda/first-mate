@@ -124,6 +124,9 @@ export function Chat({ onGoalCreated }: ChatProps) {
               priority: goal.priority,
               is_work: goal.is_work,
               status: "active",
+              preferred_time: goal.preferred_time,
+              duration_minutes: goal.duration_minutes,
+              recurring: goal.recurring,
             });
 
             if (!error) {

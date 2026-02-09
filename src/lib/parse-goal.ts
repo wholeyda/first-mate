@@ -8,6 +8,12 @@
 
 import { Goal } from "@/types/database";
 
+// Recurring schedule configuration
+export interface RecurringConfig {
+  type: "daily" | "weekly";
+  days: string[]; // lowercase day names: "monday", "tuesday", etc.
+}
+
 // Partial goal from Claude's response (before we add user_id, etc.)
 export interface ParsedGoal {
   title: string;
@@ -18,6 +24,9 @@ export interface ParsedGoal {
   priority: 1 | 2 | 3 | 4 | 5;
   is_work: boolean;
   hours_per_day: number | null;
+  preferred_time: string | null; // "HH:MM" 24-hour format
+  duration_minutes: number | null; // length of each session
+  recurring: RecurringConfig | null;
 }
 
 /**
@@ -51,6 +60,9 @@ export function parseGoalsFromResponse(text: string): ParsedGoal[] {
           priority: Math.min(5, Math.max(1, parsed.priority)) as Goal["priority"],
           is_work: Boolean(parsed.is_work),
           hours_per_day: parsed.hours_per_day || null,
+          preferred_time: parsed.preferred_time || null,
+          duration_minutes: parsed.duration_minutes || null,
+          recurring: parsed.recurring || null,
         });
       }
     } catch {

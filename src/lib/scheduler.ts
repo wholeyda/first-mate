@@ -10,6 +10,8 @@
  * - Hard deadlines are scheduled first
  * - Higher priority goals are scheduled before lower priority
  * - Never overlaps with existing calendar events
+ * - Respects preferred_time when specified
+ * - Handles recurring tasks (daily/weekly on specific days)
  * - Multi-day tasks are split across days based on hours_per_day
  */
 
@@ -39,12 +41,36 @@ export interface ProposedBlock {
 // Minimum block size in minutes
 const MIN_BLOCK_MINUTES = 15;
 
+// Day name to JS day number mapping (0 = Sunday)
+const DAY_NAME_TO_NUMBER: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+/**
+ * Check if a proposed block overlaps with any busy slot.
+ */
+function hasConflict(start: Date, end: Date, busySlots: BusySlot[]): boolean {
+  return busySlots.some(
+    (busy) => start < busy.end && end > busy.start
+  );
+}
+
 /**
  * Main scheduling function.
  * Takes goals and busy slots, returns proposed time blocks for the week.
  */
 export function generateSchedule(
-  goals: Goal[],
+  goals: (Goal & {
+    preferred_time?: string | null;
+    duration_minutes?: number | null;
+    recurring?: { type: string; days: string[] } | null;
+  })[],
   busySlots: BusySlot[],
   existingBlocks: ScheduledBlock[],
   weekStart: Date,
@@ -63,55 +89,130 @@ export function generateSchedule(
 
   // Sort goals: hard deadlines first, then by priority (high to low)
   const sortedGoals = [...goals].sort((a, b) => {
-    // Hard deadlines always come first
     if (a.is_hard_deadline && !b.is_hard_deadline) return -1;
     if (!a.is_hard_deadline && b.is_hard_deadline) return 1;
-    // Then sort by priority (5 = critical, 1 = low)
     return b.priority - a.priority;
   });
 
-  // Schedule each goal
   for (const goal of sortedGoals) {
-    const totalMinutes = goal.estimated_hours * 60;
-    let remainingMinutes = totalMinutes;
+    const calendarType: "work" | "personal" = goal.is_work ? "work" : "personal";
+    const durationMinutes = goal.duration_minutes || goal.estimated_hours * 60;
 
-    // Determine the calendar type for this goal
-    const calendarType: "work" | "personal" = goal.is_work
-      ? "work"
-      : "personal";
-
-    // Get available slots for each day of the week
-    const currentDate = new Date(weekStart);
-    while (currentDate < weekEnd && remainingMinutes > 0) {
-      const dayStart = new Date(currentDate);
-      dayStart.setHours(8, 0, 0, 0); // Default: start scheduling at 8am
-
-      const dayEnd = new Date(currentDate);
-      dayEnd.setHours(21, 0, 0, 0); // Default: stop scheduling at 9pm
-
-      // Find available slots for this day
-      const availableSlots = findAvailableSlots(
-        dayStart,
-        dayEnd,
-        [...allBusy, ...proposedBlocks.map((b) => ({
-          start: new Date(b.start_time),
-          end: new Date(b.end_time),
-        }))],
+    // --- RECURRING TASKS with preferred time ---
+    if (goal.recurring && goal.preferred_time) {
+      const [prefHour, prefMinute] = goal.preferred_time.split(":").map(Number);
+      const targetDays = goal.recurring.days.map(
+        (d) => DAY_NAME_TO_NUMBER[d.toLowerCase()]
       );
 
-      // Fill available slots with this goal's time
+      // Walk through each day of the week
+      const currentDate = new Date(weekStart);
+      while (currentDate < weekEnd) {
+        const dayOfWeek = currentDate.getDay();
+
+        if (targetDays.includes(dayOfWeek)) {
+          const blockStart = new Date(currentDate);
+          blockStart.setHours(prefHour, prefMinute, 0, 0);
+
+          const blockEnd = new Date(
+            blockStart.getTime() + durationMinutes * 60 * 1000
+          );
+
+          // Check for conflicts with all busy slots + already proposed blocks
+          const allConflicts = [
+            ...allBusy,
+            ...proposedBlocks.map((b) => ({
+              start: new Date(b.start_time),
+              end: new Date(b.end_time),
+            })),
+          ];
+
+          if (!hasConflict(blockStart, blockEnd, allConflicts)) {
+            proposedBlocks.push({
+              goal_id: goal.id,
+              goal_title: goal.title,
+              calendar_type: calendarType,
+              start_time: blockStart.toISOString(),
+              end_time: blockEnd.toISOString(),
+            });
+          }
+        }
+
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      continue; // Skip the default scheduling logic for this goal
+    }
+
+    // --- PREFERRED TIME (non-recurring) ---
+    if (goal.preferred_time) {
+      const [prefHour, prefMinute] = goal.preferred_time.split(":").map(Number);
+
+      // Find the first available day at the preferred time
+      const currentDate = new Date(weekStart);
+      let scheduled = false;
+
+      while (currentDate < weekEnd && !scheduled) {
+        const blockStart = new Date(currentDate);
+        blockStart.setHours(prefHour, prefMinute, 0, 0);
+
+        const blockEnd = new Date(
+          blockStart.getTime() + durationMinutes * 60 * 1000
+        );
+
+        const allConflicts = [
+          ...allBusy,
+          ...proposedBlocks.map((b) => ({
+            start: new Date(b.start_time),
+            end: new Date(b.end_time),
+          })),
+        ];
+
+        if (!hasConflict(blockStart, blockEnd, allConflicts)) {
+          proposedBlocks.push({
+            goal_id: goal.id,
+            goal_title: goal.title,
+            calendar_type: calendarType,
+            start_time: blockStart.toISOString(),
+            end_time: blockEnd.toISOString(),
+          });
+          scheduled = true;
+        }
+
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      continue;
+    }
+
+    // --- DEFAULT: auto-find slots ---
+    let remainingMinutes = goal.estimated_hours * 60;
+    const currentDate = new Date(weekStart);
+
+    while (currentDate < weekEnd && remainingMinutes > 0) {
+      const dayStart = new Date(currentDate);
+      dayStart.setHours(8, 0, 0, 0);
+
+      const dayEnd = new Date(currentDate);
+      dayEnd.setHours(21, 0, 0, 0);
+
+      const availableSlots = findAvailableSlots(dayStart, dayEnd, [
+        ...allBusy,
+        ...proposedBlocks.map((b) => ({
+          start: new Date(b.start_time),
+          end: new Date(b.end_time),
+        })),
+      ]);
+
       for (const slot of availableSlots) {
         if (remainingMinutes <= 0) break;
 
-        const slotDuration = (slot.end.getTime() - slot.start.getTime()) / (1000 * 60);
+        const slotDuration =
+          (slot.end.getTime() - slot.start.getTime()) / (1000 * 60);
 
-        // Skip slots shorter than minimum
         if (slotDuration < MIN_BLOCK_MINUTES) continue;
 
-        // Use this slot (or part of it)
         const blockMinutes = Math.min(remainingMinutes, slotDuration);
-
-        // Round to nearest 15 minutes
         const roundedMinutes =
           Math.ceil(blockMinutes / MIN_BLOCK_MINUTES) * MIN_BLOCK_MINUTES;
         const actualMinutes = Math.min(roundedMinutes, slotDuration);
@@ -133,7 +234,6 @@ export function generateSchedule(
         remainingMinutes -= actualMinutes;
       }
 
-      // Move to next day
       currentDate.setDate(currentDate.getDate() + 1);
     }
   }
@@ -150,7 +250,6 @@ function findAvailableSlots(
   dayEnd: Date,
   busySlots: BusySlot[]
 ): TimeSlot[] {
-  // Filter busy slots to only those that overlap with this day
   const dayBusy = busySlots
     .filter((slot) => slot.start < dayEnd && slot.end > dayStart)
     .map((slot) => ({
@@ -163,7 +262,6 @@ function findAvailableSlots(
   let cursor = new Date(dayStart);
 
   for (const busy of dayBusy) {
-    // If there's a gap before this busy period, it's available
     if (cursor < busy.start) {
       const gapMinutes =
         (busy.start.getTime() - cursor.getTime()) / (1000 * 60);
@@ -171,13 +269,11 @@ function findAvailableSlots(
         available.push({ start: new Date(cursor), end: new Date(busy.start) });
       }
     }
-    // Move cursor past this busy period
     if (busy.end > cursor) {
       cursor = new Date(busy.end);
     }
   }
 
-  // Check for available time after the last busy period
   if (cursor < dayEnd) {
     const gapMinutes = (dayEnd.getTime() - cursor.getTime()) / (1000 * 60);
     if (gapMinutes >= MIN_BLOCK_MINUTES) {
@@ -194,7 +290,6 @@ function findAvailableSlots(
 export function getCurrentWeekRange(): { weekStart: Date; weekEnd: Date } {
   const now = new Date();
   const dayOfWeek = now.getDay();
-  // Adjust so Monday = 0
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 
   const weekStart = new Date(now);
