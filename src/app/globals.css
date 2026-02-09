@@ -80,6 +80,53 @@ h1, h2, h3 {
   transition: opacity 0.8s ease-in-out;
 }
 
+/* Dancing stick figure animations */
+@keyframes dance-bounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-6px); }
+}
+
+@keyframes dance-sway {
+  0% { transform: translateX(-3px) rotate(-2deg); }
+  100% { transform: translateX(3px) rotate(2deg); }
+}
+
+@keyframes dance-jump {
+  0% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-10px) scaleY(1.02); }
+  100% { transform: translateY(0) scaleY(0.98); }
+}
+
+@keyframes arms-wave {
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(25deg); }
+}
+
+@keyframes arms-pump {
+  0% { transform: rotate(-5deg) translateY(0); }
+  100% { transform: rotate(-40deg) translateY(-4px); }
+}
+
+@keyframes arms-disco {
+  0% { transform: rotate(10deg); }
+  100% { transform: rotate(-30deg); }
+}
+
+@keyframes legs-step {
+  0% { transform: rotate(-8deg); }
+  100% { transform: rotate(8deg); }
+}
+
+@keyframes legs-kick {
+  0% { transform: rotate(-5deg); }
+  100% { transform: rotate(15deg); }
+}
+
+@keyframes legs-shuffle {
+  0% { transform: rotate(-12deg); }
+  100% { transform: rotate(4deg); }
+}
+
 /* Selection color */
 ::selection {
   background: rgba(0, 0, 0, 0.1);

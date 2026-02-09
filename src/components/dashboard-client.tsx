@@ -12,7 +12,7 @@ import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
 import { CalendarView } from "@/components/calendar-view";
 import { DailyReview } from "@/components/daily-review";
-import { PirateShip } from "@/components/pirate-ship";
+import { DancingFigures } from "@/components/dancing-figures";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { Goal } from "@/types/database";
 import {
@@ -94,7 +94,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
           )}
           {activeTab === "calendar" && <CalendarView />}
           {activeTab === "review" && <DailyReview />}
-          {activeTab === "ship" && <PirateShip />}
+          {activeTab === "ship" && <DancingFigures goals={goals} />}
         </div>
       </div>
 
