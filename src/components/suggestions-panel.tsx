@@ -46,7 +46,33 @@ export function SuggestionsPanel() {
     fetchSuggestions();
   }, []);
 
-  if (isLoading || suggestions.length === 0) return null;
+  if (isLoading) {
+    return (
+      <div className="px-4 pb-4">
+        <h3 className="text-sm font-semibold text-[#c9a84c] mb-3">
+          Captain&apos;s Recommendations
+        </h3>
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="bg-[#112240] border border-[#1e3a5f] rounded-xl p-3 animate-pulse"
+            >
+              <div className="flex items-start gap-2">
+                <div className="w-4 h-4 bg-[#1e3a5f] rounded" />
+                <div className="flex-1">
+                  <div className="h-3 bg-[#1e3a5f] rounded w-3/4 mb-1.5" />
+                  <div className="h-2.5 bg-[#1e3a5f] rounded w-1/2" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (suggestions.length === 0) return null;
 
   return (
     <div className="px-4 pb-4">

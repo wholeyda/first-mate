@@ -59,29 +59,6 @@ export async function fetchEvents(
 }
 
 /**
- * Fetch events from both personal and work calendars.
- * Returns them combined and sorted by start time.
- */
-export async function fetchAllEvents(
-  accessToken: string,
-  refreshToken: string | null,
-  personalCalendarId: string,
-  workCalendarId: string,
-  timeMin: string,
-  timeMax: string
-): Promise<{ events: calendar_v3.Schema$Event[]; calendarType: string }[]> {
-  const [personalEvents, workEvents] = await Promise.all([
-    fetchEvents(accessToken, refreshToken, personalCalendarId, timeMin, timeMax),
-    fetchEvents(accessToken, refreshToken, workCalendarId, timeMin, timeMax),
-  ]);
-
-  return [
-    ...personalEvents.map((event) => ({ events: [event], calendarType: "personal" as const })),
-    ...workEvents.map((event) => ({ events: [event], calendarType: "work" as const })),
-  ];
-}
-
-/**
  * Get all busy time slots from both calendars.
  * Filters out app-created events (so we don't block against our own blocks).
  * Returns a flat list of { start, end } objects.

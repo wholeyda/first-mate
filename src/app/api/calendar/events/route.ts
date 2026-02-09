@@ -117,6 +117,47 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { calendarType, summary, description, startTime, endTime } = body;
 
+    // Validate required fields
+    if (!summary || typeof summary !== "string" || summary.trim().length === 0) {
+      return NextResponse.json(
+        { error: "summary is required and must be a non-empty string" },
+        { status: 400 }
+      );
+    }
+    if (!startTime || typeof startTime !== "string") {
+      return NextResponse.json(
+        { error: "startTime is required as an ISO date string" },
+        { status: 400 }
+      );
+    }
+    if (!endTime || typeof endTime !== "string") {
+      return NextResponse.json(
+        { error: "endTime is required as an ISO date string" },
+        { status: 400 }
+      );
+    }
+    // Validate dates are parseable and end > start
+    const parsedStart = new Date(startTime);
+    const parsedEnd = new Date(endTime);
+    if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+      return NextResponse.json(
+        { error: "startTime and endTime must be valid ISO date strings" },
+        { status: 400 }
+      );
+    }
+    if (parsedEnd <= parsedStart) {
+      return NextResponse.json(
+        { error: "endTime must be after startTime" },
+        { status: 400 }
+      );
+    }
+    if (calendarType && !["work", "personal"].includes(calendarType)) {
+      return NextResponse.json(
+        { error: "calendarType must be 'work' or 'personal'" },
+        { status: 400 }
+      );
+    }
+
     // Determine which calendar to write to
     const calendarId =
       calendarType === "work"

@@ -9,7 +9,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { parseGoalsFromResponse, stripGoalJson, ParsedGoal } from "@/lib/parse-goal";
 
 interface Message {
@@ -106,32 +105,20 @@ export function Chat({ onGoalCreated }: ChatProps) {
       // Check if the response contains goal JSON
       const goals = parseGoalsFromResponse(assistantContent);
       if (goals.length > 0 && onGoalCreated) {
-        // Save each goal to the database
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-          for (const goal of goals) {
-            const { error } = await supabase.from("goals").insert({
-              user_id: user.id,
-              title: goal.title,
-              description: goal.description,
-              due_date: goal.due_date,
-              estimated_hours: goal.estimated_hours,
-              is_hard_deadline: goal.is_hard_deadline,
-              priority: goal.priority,
-              is_work: goal.is_work,
-              status: "active",
-              preferred_time: goal.preferred_time,
-              duration_minutes: goal.duration_minutes,
-              recurring: goal.recurring,
+        // Save each goal via the server-side API route
+        for (const goal of goals) {
+          try {
+            const saveResponse = await fetch("/api/goals", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ goal }),
             });
 
-            if (!error) {
+            if (saveResponse.ok) {
               onGoalCreated(goal);
             }
+          } catch {
+            // Goal save failed silently — user can retry via chat
           }
         }
       }

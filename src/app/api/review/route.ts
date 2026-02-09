@@ -120,76 +120,104 @@ export async function POST(request: NextRequest) {
 
     let totalNewPoints = 0;
     const newPirates: { trait: string; image_key: string; goal_title: string }[] = [];
+    const blockErrors: string[] = [];
 
     for (const blockId of completedBlockIds) {
-      // Get the block details
-      const { data: block } = await supabase
-        .from("scheduled_blocks")
-        .select("*, goals(*)")
-        .eq("id", blockId)
-        .eq("user_id", user.id)
-        .single();
+      try {
+        // Get the block details
+        const { data: block, error: fetchError } = await supabase
+          .from("scheduled_blocks")
+          .select("*, goals(*)")
+          .eq("id", blockId)
+          .eq("user_id", user.id)
+          .single();
 
-      if (!block || block.is_completed) continue;
+        if (fetchError || !block || block.is_completed) continue;
 
-      // Mark as completed
-      await supabase
-        .from("scheduled_blocks")
-        .update({ is_completed: true })
-        .eq("id", blockId);
+        // Mark as completed
+        const { error: updateError } = await supabase
+          .from("scheduled_blocks")
+          .update({ is_completed: true })
+          .eq("id", blockId);
 
-      // Calculate points: 1 point per 10 minutes
-      const start = new Date(block.start_time);
-      const end = new Date(block.end_time);
-      const durationMinutes = (end.getTime() - start.getTime()) / (1000 * 60);
-      const points = Math.floor(durationMinutes / 10);
-      totalNewPoints += points;
+        if (updateError) {
+          blockErrors.push(`Failed to mark block ${blockId} complete`);
+          continue; // Don't award points if we couldn't mark complete
+        }
 
-      // Spawn a pirate for this completed task
-      const goalTitle = block.goals?.title || "Task";
-      const pirateInfo = getPirateTraitForGoal(goalTitle);
+        // Calculate points: 1 point per 10 minutes
+        const start = new Date(block.start_time);
+        const end = new Date(block.end_time);
+        const durationMinutes = (end.getTime() - start.getTime()) / (1000 * 60);
+        const points = Math.floor(durationMinutes / 10);
+        totalNewPoints += points;
 
-      await supabase.from("pirates").insert({
-        user_id: user.id,
-        goal_id: block.goal_id,
-        trait_description: pirateInfo.trait,
-        image_key: pirateInfo.image_key,
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear(),
-      });
+        // Spawn a pirate for this completed task
+        const goalTitle = block.goals?.title || "Task";
+        const pirateInfo = getPirateTraitForGoal(goalTitle);
 
-      newPirates.push({ ...pirateInfo, goal_title: goalTitle });
+        const { error: pirateError } = await supabase.from("pirates").insert({
+          user_id: user.id,
+          goal_id: block.goal_id,
+          trait_description: pirateInfo.trait,
+          image_key: pirateInfo.image_key,
+          month: new Date().getMonth() + 1,
+          year: new Date().getFullYear(),
+        });
+
+        if (pirateError) {
+          blockErrors.push(`Failed to spawn pirate for ${goalTitle}`);
+        }
+
+        newPirates.push({ ...pirateInfo, goal_title: goalTitle });
+      } catch (blockError) {
+        console.error(`Error processing block ${blockId}:`, blockError);
+        blockErrors.push(`Unexpected error processing block ${blockId}`);
+      }
     }
 
     // Update monthly productivity score
-    const month = new Date().getMonth() + 1;
-    const year = new Date().getFullYear();
+    if (totalNewPoints > 0) {
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
 
-    const { data: existingScore } = await supabase
-      .from("productivity_score")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("month", month)
-      .eq("year", year)
-      .single();
-
-    if (existingScore) {
-      await supabase
+      const { data: existingScore } = await supabase
         .from("productivity_score")
-        .update({ total_points: existingScore.total_points + totalNewPoints })
-        .eq("id", existingScore.id);
-    } else {
-      await supabase.from("productivity_score").insert({
-        user_id: user.id,
-        month,
-        year,
-        total_points: totalNewPoints,
-      });
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("month", month)
+        .eq("year", year)
+        .single();
+
+      if (existingScore) {
+        const { error: scoreError } = await supabase
+          .from("productivity_score")
+          .update({ total_points: existingScore.total_points + totalNewPoints })
+          .eq("id", existingScore.id);
+
+        if (scoreError) {
+          blockErrors.push("Failed to update productivity score");
+        }
+      } else {
+        const { error: scoreError } = await supabase
+          .from("productivity_score")
+          .insert({
+            user_id: user.id,
+            month,
+            year,
+            total_points: totalNewPoints,
+          });
+
+        if (scoreError) {
+          blockErrors.push("Failed to create productivity score");
+        }
+      }
     }
 
     return NextResponse.json({
       pointsEarned: totalNewPoints,
       piratesSpawned: newPirates,
+      errors: blockErrors.length > 0 ? blockErrors : undefined,
     });
   } catch (error) {
     console.error("Review API error:", error);

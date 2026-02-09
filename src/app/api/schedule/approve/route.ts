@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createEvent } from "@/lib/google-calendar";
+import { createEvent, deleteEvent } from "@/lib/google-calendar";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -49,22 +49,30 @@ export async function POST(request: NextRequest) {
     const personalId = profile.personal_calendar_id || profile.email;
     const workId = profile.work_calendar_id || profile.email;
     const createdBlocks = [];
+    const errors = [];
 
     for (const block of blocks) {
       // Determine which calendar to write to
       const calendarId =
         block.calendar_type === "work" ? workId : personalId;
 
-      // Create the event on Google Calendar
-      const event = await createEvent(
-        profile.google_access_token,
-        profile.google_refresh_token,
-        calendarId,
-        block.goal_title,
-        `Scheduled by First Mate`,
-        block.start_time,
-        block.end_time
-      );
+      let event;
+      try {
+        // Create the event on Google Calendar
+        event = await createEvent(
+          profile.google_access_token,
+          profile.google_refresh_token,
+          calendarId,
+          block.goal_title,
+          `Scheduled by First Mate`,
+          block.start_time,
+          block.end_time
+        );
+      } catch (calError) {
+        console.error("Google Calendar create failed:", calError);
+        errors.push({ block: block.goal_title, stage: "google_calendar" });
+        continue; // Skip this block, try next
+      }
 
       // Save to our database
       const { data: savedBlock, error } = await supabase
@@ -81,14 +89,29 @@ export async function POST(request: NextRequest) {
         .select()
         .single();
 
-      if (!error && savedBlock) {
+      if (error || !savedBlock) {
+        // Rollback: delete the Google Calendar event since DB save failed
+        console.error("DB save failed, rolling back Google event:", error);
+        try {
+          await deleteEvent(
+            profile.google_access_token,
+            profile.google_refresh_token,
+            calendarId,
+            event.id!
+          );
+        } catch (rollbackError) {
+          console.error("Rollback delete failed:", rollbackError);
+        }
+        errors.push({ block: block.goal_title, stage: "database" });
+      } else {
         createdBlocks.push(savedBlock);
       }
     }
 
     return NextResponse.json({
-      success: true,
+      success: errors.length === 0,
       blocksCreated: createdBlocks.length,
+      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
     console.error("Schedule approve error:", error);

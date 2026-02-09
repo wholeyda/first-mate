@@ -65,12 +65,22 @@ function hasConflict(start: Date, end: Date, busySlots: BusySlot[]): boolean {
  * Main scheduling function.
  * Takes goals and busy slots, returns proposed time blocks for the week.
  */
+/**
+ * Validate preferred_time format (HH:MM, 00-23:00-59).
+ * Returns [hours, minutes] if valid, null otherwise.
+ */
+function parsePreferredTime(time: string | null | undefined): [number, number] | null {
+  if (!time) return null;
+  const match = time.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return [hours, minutes];
+}
+
 export function generateSchedule(
-  goals: (Goal & {
-    preferred_time?: string | null;
-    duration_minutes?: number | null;
-    recurring?: { type: string; days: string[] } | null;
-  })[],
+  goals: Goal[],
   busySlots: BusySlot[],
   existingBlocks: ScheduledBlock[],
   weekStart: Date,
@@ -100,7 +110,9 @@ export function generateSchedule(
 
     // --- RECURRING TASKS with preferred time ---
     if (goal.recurring && goal.preferred_time) {
-      const [prefHour, prefMinute] = goal.preferred_time.split(":").map(Number);
+      const parsedTime = parsePreferredTime(goal.preferred_time);
+      if (!parsedTime) continue; // Skip if invalid time format
+      const [prefHour, prefMinute] = parsedTime;
       const targetDays = goal.recurring.days.map(
         (d) => DAY_NAME_TO_NUMBER[d.toLowerCase()]
       );
@@ -146,7 +158,9 @@ export function generateSchedule(
 
     // --- PREFERRED TIME (non-recurring) ---
     if (goal.preferred_time) {
-      const [prefHour, prefMinute] = goal.preferred_time.split(":").map(Number);
+      const parsedTime = parsePreferredTime(goal.preferred_time);
+      if (!parsedTime) continue; // Skip if invalid time format
+      const [prefHour, prefMinute] = parsedTime;
 
       // Find the first available day at the preferred time
       const currentDate = new Date(weekStart);
