@@ -48,7 +48,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     initNotifications();
   }, []);
 
-  function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>) {
+  function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>, _scheduledBlocks?: Array<{ start_time: string; end_time: string; calendar_type: string; google_event_id: string }>) {
     const newGoal: Goal = {
       id: (savedGoal?.id as string) || crypto.randomUUID(),
       user_id: (savedGoal?.user_id as string) || "",

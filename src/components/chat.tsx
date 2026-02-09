@@ -17,8 +17,15 @@ interface Message {
   content: string;
 }
 
+interface ScheduledBlock {
+  start_time: string;
+  end_time: string;
+  calendar_type: string;
+  google_event_id: string;
+}
+
 interface ChatProps {
-  onGoalCreated?: (goal: ParsedGoal, savedGoal?: Record<string, unknown>) => void;
+  onGoalCreated?: (goal: ParsedGoal, savedGoal?: Record<string, unknown>, scheduledBlocks?: ScheduledBlock[]) => void;
 }
 
 export function Chat({ onGoalCreated }: ChatProps) {
@@ -117,8 +124,41 @@ export function Chat({ onGoalCreated }: ChatProps) {
 
             if (saveResponse.ok) {
               const savedData = await saveResponse.json();
-              // Pass the DB-returned goal (with real ID) if available
-              onGoalCreated(goal, savedData.goal);
+              onGoalCreated(goal, savedData.goal, savedData.scheduledBlocks);
+
+              // Append scheduling confirmation to the assistant message
+              if (savedData.scheduledBlocks?.length > 0) {
+                const block = savedData.scheduledBlocks[0];
+                const startDate = new Date(block.start_time);
+                const timeStr = startDate.toLocaleString("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                });
+                const count = savedData.scheduledBlocks.length;
+                const suffix = count > 1 ? ` (and ${count - 1} more)` : "";
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: updated[updated.length - 1].content +
+                      `\n\nScheduled on your ${block.calendar_type} calendar: ${timeStr}${suffix}`,
+                  };
+                  return updated;
+                });
+              } else if (savedData.schedulingError) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: updated[updated.length - 1].content +
+                      `\n\n(${savedData.schedulingError})`,
+                  };
+                  return updated;
+                });
+              }
             }
           } catch {
             // Goal save failed silently — user can retry via chat

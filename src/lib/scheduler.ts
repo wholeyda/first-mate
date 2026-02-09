@@ -299,6 +299,153 @@ function findAvailableSlots(
 }
 
 /**
+ * Find the next available time slot for a single goal.
+ * Used for auto-scheduling when a goal is created.
+ * Searches from today through the goal's due date (or 2 weeks out).
+ */
+export function findNextSlot(
+  goal: Goal,
+  busySlots: BusySlot[],
+  startDate: Date,
+  endDate: Date
+): ProposedBlock | null {
+  const calendarType: "work" | "personal" = goal.is_work ? "work" : "personal";
+  const durationMinutes = goal.duration_minutes ?? Math.min(goal.estimated_hours * 60, 120);
+
+  // If preferred time is set, try to find a day at that time
+  if (goal.preferred_time) {
+    const parsedTime = parsePreferredTime(goal.preferred_time);
+    if (parsedTime) {
+      const [prefHour, prefMinute] = parsedTime;
+      const currentDate = new Date(startDate);
+
+      while (currentDate < endDate) {
+        const blockStart = new Date(currentDate);
+        blockStart.setHours(prefHour, prefMinute, 0, 0);
+
+        // Skip if block start is in the past
+        if (blockStart > new Date()) {
+          const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
+
+          if (!hasConflict(blockStart, blockEnd, busySlots)) {
+            return {
+              goal_id: goal.id,
+              goal_title: goal.title,
+              calendar_type: calendarType,
+              start_time: blockStart.toISOString(),
+              end_time: blockEnd.toISOString(),
+            };
+          }
+        }
+
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    }
+  }
+
+  // Default: scan 8AM-9PM for first available slot
+  const currentDate = new Date(startDate);
+  while (currentDate < endDate) {
+    const dayStart = new Date(currentDate);
+    dayStart.setHours(8, 0, 0, 0);
+
+    const dayEnd = new Date(currentDate);
+    dayEnd.setHours(21, 0, 0, 0);
+
+    // Skip past times for today
+    const now = new Date();
+    const effectiveStart = dayStart < now ? new Date(Math.ceil(now.getTime() / (15 * 60 * 1000)) * (15 * 60 * 1000)) : dayStart;
+
+    if (effectiveStart < dayEnd) {
+      const availableSlots = findAvailableSlots(effectiveStart, dayEnd, busySlots);
+
+      for (const slot of availableSlots) {
+        const slotDuration = (slot.end.getTime() - slot.start.getTime()) / (1000 * 60);
+        if (slotDuration >= Math.min(durationMinutes, MIN_BLOCK_MINUTES)) {
+          const actualMinutes = Math.min(durationMinutes, slotDuration);
+          const blockEnd = new Date(slot.start.getTime() + actualMinutes * 60 * 1000);
+
+          return {
+            goal_id: goal.id,
+            goal_title: goal.title,
+            calendar_type: calendarType,
+            start_time: slot.start.toISOString(),
+            end_time: blockEnd.toISOString(),
+          };
+        }
+      }
+    }
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return null;
+}
+
+/**
+ * Find all recurring time slots for a goal within a date range.
+ * Used for recurring goals (daily/weekly on specific days).
+ */
+export function findRecurringSlots(
+  goal: Goal,
+  busySlots: BusySlot[],
+  startDate: Date,
+  endDate: Date
+): ProposedBlock[] {
+  const blocks: ProposedBlock[] = [];
+  if (!goal.recurring) return blocks;
+
+  const calendarType: "work" | "personal" = goal.is_work ? "work" : "personal";
+  const durationMinutes = goal.duration_minutes ?? Math.min(goal.estimated_hours * 60, 60);
+  const parsedTime = parsePreferredTime(goal.preferred_time);
+  const [prefHour, prefMinute] = parsedTime || [9, 0]; // Default 9:00 AM
+
+  const targetDays = goal.recurring.days.map(
+    (d) => DAY_NAME_TO_NUMBER[d.toLowerCase()]
+  ).filter((d) => d !== undefined);
+
+  const currentDate = new Date(startDate);
+  const now = new Date();
+
+  while (currentDate < endDate) {
+    const dayOfWeek = currentDate.getDay();
+
+    if (targetDays.includes(dayOfWeek)) {
+      const blockStart = new Date(currentDate);
+      blockStart.setHours(prefHour, prefMinute, 0, 0);
+
+      // Skip if in the past
+      if (blockStart > now) {
+        const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
+
+        // Include already-scheduled recurring blocks as busy
+        const allBusy = [
+          ...busySlots,
+          ...blocks.map((b) => ({
+            start: new Date(b.start_time),
+            end: new Date(b.end_time),
+          })),
+        ];
+
+        if (!hasConflict(blockStart, blockEnd, allBusy)) {
+          blocks.push({
+            goal_id: goal.id,
+            goal_title: goal.title,
+            calendar_type: calendarType,
+            start_time: blockStart.toISOString(),
+            end_time: blockEnd.toISOString(),
+          });
+        }
+      }
+    }
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return blocks;
+}
+
+/**
  * Get the start and end of the current week (Monday to Sunday).
  */
 export function getCurrentWeekRange(): { weekStart: Date; weekEnd: Date } {
