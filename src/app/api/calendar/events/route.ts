@@ -54,11 +54,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch events from both calendars
+    // Fetch events from both calendars — use allSettled so one failure doesn't break both
     const personalId = profile.personal_calendar_id || profile.email;
     const workId = profile.work_calendar_id || profile.email;
 
-    const [personalEvents, workEvents] = await Promise.all([
+    const warnings: string[] = [];
+
+    const [personalResult, workResult] = await Promise.allSettled([
       fetchEvents(
         profile.google_access_token,
         profile.google_refresh_token,
@@ -75,9 +77,27 @@ export async function GET(request: NextRequest) {
       ),
     ]);
 
+    let personalEvents: Awaited<ReturnType<typeof fetchEvents>> = [];
+    let workEvents: Awaited<ReturnType<typeof fetchEvents>> = [];
+
+    if (personalResult.status === "fulfilled") {
+      personalEvents = personalResult.value;
+    } else {
+      console.error("Personal calendar fetch error:", personalResult.reason);
+      warnings.push("Could not load personal calendar events");
+    }
+
+    if (workResult.status === "fulfilled") {
+      workEvents = workResult.value;
+    } else {
+      console.error("Work calendar fetch error:", workResult.reason);
+      warnings.push("Could not load work calendar events");
+    }
+
     return NextResponse.json({
       personal: personalEvents,
       work: workEvents,
+      ...(warnings.length > 0 ? { warnings } : {}),
     });
   } catch (error) {
     console.error("Calendar fetch error:", error);

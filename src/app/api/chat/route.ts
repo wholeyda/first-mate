@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { SYSTEM_PROMPT } from "@/lib/chat-system-prompt";
+import { getSystemPrompt } from "@/lib/chat-system-prompt";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const stream = anthropic.messages.stream({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: getSystemPrompt(),
       messages: messages.map((msg: { role: string; content: string }) => ({
         role: msg.role,
         content: msg.content,

@@ -75,9 +75,10 @@ export function parseGoalsFromResponse(text: string): ParsedGoal[] {
 }
 
 /**
- * Strip the goal_json code blocks from the message text.
+ * Strip ALL fenced code blocks from the message text.
  * Returns the clean human-readable part of Claude's response.
+ * Handles ```goal_json, ```json, ``` (no tag), etc.
  */
 export function stripGoalJson(text: string): string {
-  return text.replace(/```goal_json\s*[\s\S]*?```/g, "").trim();
+  return text.replace(/```[\w]*\s*[\s\S]*?```/g, "").trim();
 }

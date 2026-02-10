@@ -71,10 +71,21 @@ export async function getBusySlots(
   timeMin: string,
   timeMax: string
 ): Promise<{ start: Date; end: Date; calendarType: string }[]> {
-  const [personalEvents, workEvents] = await Promise.all([
+  // Use allSettled so one calendar failure doesn't break scheduling
+  const [personalResult, workResult] = await Promise.allSettled([
     fetchEvents(accessToken, refreshToken, personalCalendarId, timeMin, timeMax),
     fetchEvents(accessToken, refreshToken, workCalendarId, timeMin, timeMax),
   ]);
+
+  const personalEvents = personalResult.status === "fulfilled" ? personalResult.value : [];
+  const workEvents = workResult.status === "fulfilled" ? workResult.value : [];
+
+  if (personalResult.status === "rejected") {
+    console.error("getBusySlots: personal calendar error:", personalResult.reason);
+  }
+  if (workResult.status === "rejected") {
+    console.error("getBusySlots: work calendar error:", workResult.reason);
+  }
 
   const allEvents = [
     ...personalEvents.map((e) => ({ event: e, calendarType: "personal" })),

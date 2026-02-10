@@ -12,6 +12,9 @@ export interface User {
   google_refresh_token: string | null;
   work_calendar_id: string | null;
   personal_calendar_id: string | null;
+  spotify_access_token: string | null;
+  spotify_refresh_token: string | null;
+  spotify_token_expires_at: string | null;
   created_at: string;
 }
 
@@ -41,6 +44,7 @@ export interface ScheduledBlock {
   start_time: string;
   end_time: string;
   is_completed: boolean;
+  status?: "pending" | "approved" | "rejected";
 }
 
 export interface ProductivityScore {
@@ -49,6 +53,22 @@ export interface ProductivityScore {
   month: number;
   year: number;
   total_points: number;
+  created_at: string;
+}
+
+export interface SubGoal {
+  id: string;
+  user_id: string;
+  parent_goal_id: string;
+  title: string;
+  description: string | null;
+  estimated_hours: number;
+  start_date: string | null;
+  end_date: string | null;
+  status: "pending" | "in_progress" | "completed";
+  sort_order: number;
+  depends_on: string[];
+  google_event_id: string | null;
   created_at: string;
 }
 

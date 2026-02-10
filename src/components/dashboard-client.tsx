@@ -11,7 +11,6 @@ import { useState, useEffect } from "react";
 import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
 import { CalendarView } from "@/components/calendar-view";
-import { DailyReview } from "@/components/daily-review";
 import { DancingFigures } from "@/components/dancing-figures";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { Goal } from "@/types/database";
@@ -25,7 +24,7 @@ interface DashboardClientProps {
   initialGoals: Goal[];
 }
 
-type Tab = "chat" | "calendar" | "review" | "ship";
+type Tab = "chat" | "calendar" | "ship";
 
 export function DashboardClient({ initialGoals }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
@@ -63,13 +62,17 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     setGoals((prev) => [...prev, newGoal]);
   }
 
+  function handleGoalDeleted(goalId: string) {
+    setGoals((prev) => prev.filter((g) => g.id !== goalId));
+  }
+
   return (
     <div className="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
         <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100">
-          {(["chat", "calendar", "review", "ship"] as Tab[]).map((tab) => (
+          {(["chat", "calendar", "ship"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -81,7 +84,6 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
             >
               {tab === "chat" && "Chat"}
               {tab === "calendar" && "Calendar"}
-              {tab === "review" && "Review"}
               {tab === "ship" && "Crew"}
             </button>
           ))}
@@ -93,13 +95,12 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
             <Chat onGoalCreated={handleGoalCreated} />
           )}
           {activeTab === "calendar" && <CalendarView />}
-          {activeTab === "review" && <DailyReview />}
           {activeTab === "ship" && <DancingFigures goals={goals} />}
         </div>
       </div>
 
       {/* Goals sidebar */}
-      <GoalsSidebar goals={goals} />
+      <GoalsSidebar goals={goals} onGoalDeleted={handleGoalDeleted} />
     </div>
   );
 }

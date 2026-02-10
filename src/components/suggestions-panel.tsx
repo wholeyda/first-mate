@@ -2,12 +2,12 @@
  * Suggestions Panel
  *
  * Displays curated resources matched to the user's active goals.
- * Shown in the goals sidebar.
+ * Supports dismiss (×) per suggestion and refresh (↻) to load new ones.
  */
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface Suggestion {
   title: string;
@@ -28,25 +28,46 @@ const TYPE_ICONS: Record<string, string> = {
 export function SuggestionsPanel() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dismissedUrls, setDismissedUrls] = useState<string[]>([]);
 
-  useEffect(() => {
-    async function fetchSuggestions() {
-      try {
-        const response = await fetch("/api/suggestions");
-        if (response.ok) {
-          const data = await response.json();
-          setSuggestions(data.suggestions || []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch suggestions:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchSuggestions = useCallback(async (exclude: string[] = []) => {
+    setIsLoading(true);
+    try {
+      const excludeParam = exclude.length > 0 ? `?exclude=${exclude.join(",")}` : "";
+      const response = await fetch(`/api/suggestions${excludeParam}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSuggestions(data.suggestions || []);
       }
+    } catch (error) {
+      console.error("Failed to fetch suggestions:", error);
+    } finally {
+      setIsLoading(false);
     }
-    fetchSuggestions();
   }, []);
 
-  if (isLoading) {
+  useEffect(() => {
+    fetchSuggestions();
+  }, [fetchSuggestions]);
+
+  function handleDismiss(url: string) {
+    const newDismissed = [...dismissedUrls, url];
+    setDismissedUrls(newDismissed);
+    // Remove from current list immediately
+    setSuggestions((prev) => prev.filter((s) => s.url !== url));
+    // Fetch replacement
+    fetchSuggestions(newDismissed);
+  }
+
+  function handleRefresh() {
+    // Exclude everything currently shown + previously dismissed
+    const currentUrls = suggestions.map((s) => s.url);
+    const allExcluded = [...new Set([...dismissedUrls, ...currentUrls])];
+    setDismissedUrls(allExcluded);
+    fetchSuggestions(allExcluded);
+  }
+
+  if (isLoading && suggestions.length === 0) {
     return (
       <div className="px-4 pb-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">
@@ -72,37 +93,60 @@ export function SuggestionsPanel() {
     );
   }
 
-  if (suggestions.length === 0) return null;
+  if (suggestions.length === 0 && !isLoading) return null;
 
   return (
     <div className="px-4 pb-4">
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">
-        Recommendations
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-900">
+          Recommendations
+        </h3>
+        <button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="text-gray-400 hover:text-gray-900 transition-colors cursor-pointer text-xs"
+          title="Refresh recommendations"
+        >
+          ↻
+        </button>
+      </div>
       <div className="space-y-2">
         {suggestions.map((suggestion, index) => (
-          <a
+          <div
             key={index}
-            href={suggestion.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block border border-gray-100 rounded-xl p-3 hover:border-gray-300 transition-colors"
+            className="border border-gray-100 rounded-xl p-3 hover:border-gray-300 transition-colors relative group"
           >
-            <div className="flex items-start gap-2">
-              <span className="text-sm text-gray-400">
-                {TYPE_ICONS[suggestion.type] || "·"}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-gray-900 text-xs font-medium truncate">
-                  {suggestion.title}
-                </p>
-                <p className="text-gray-400 text-xs mt-0.5">
-                  {suggestion.timeEstimate} ·{" "}
-                  For: {suggestion.goalTitle}
-                </p>
+            {/* Dismiss button */}
+            <button
+              onClick={() => handleDismiss(suggestion.url)}
+              className="absolute top-2 right-2 w-4 h-4 flex items-center justify-center text-gray-300 hover:text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px]"
+              title="Dismiss"
+            >
+              ×
+            </button>
+
+            <a
+              href={suggestion.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block"
+            >
+              <div className="flex items-start gap-2">
+                <span className="text-sm text-gray-400">
+                  {TYPE_ICONS[suggestion.type] || "·"}
+                </span>
+                <div className="flex-1 min-w-0 pr-4">
+                  <p className="text-gray-900 text-xs font-medium truncate">
+                    {suggestion.title}
+                  </p>
+                  <p className="text-gray-400 text-xs mt-0.5">
+                    {suggestion.timeEstimate} ·{" "}
+                    For: {suggestion.goalTitle}
+                  </p>
+                </div>
               </div>
-            </div>
-          </a>
+            </a>
+          </div>
         ))}
       </div>
     </div>

@@ -3,13 +3,16 @@
  *
  * GET - Returns curated suggestions based on the user's active goals.
  * Matches goal titles/descriptions to resource categories.
+ *
+ * Query params:
+ *   exclude - comma-separated URLs to exclude from results
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSuggestionsForGoal, Suggestion } from "@/lib/suggestions";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await createClient();
 
   const {
@@ -18,6 +21,11 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Parse exclude list from query params
+  const { searchParams } = new URL(request.url);
+  const excludeParam = searchParams.get("exclude") || "";
+  const excludeUrls = excludeParam ? excludeParam.split(",").map((u) => u.trim()) : [];
 
   // Get active goals
   const { data: goals } = await supabase
@@ -35,7 +43,7 @@ export async function GET() {
   const allSuggestions: (Suggestion & { goalTitle: string })[] = [];
 
   for (const goal of goals) {
-    const matches = getSuggestionsForGoal(goal.title, goal.description);
+    const matches = getSuggestionsForGoal(goal.title, goal.description, excludeUrls);
     for (const suggestion of matches) {
       if (!seen.has(suggestion.url)) {
         seen.add(suggestion.url);

@@ -3,15 +3,19 @@
  *
  * Shows a list of active goals on the right side of the dashboard.
  * Each goal displays its title, priority, due date, and type (work/personal).
+ * Goals can be deleted (archived) with the × button.
  */
 
 "use client";
 
+import { useState } from "react";
+import Link from "next/link";
 import { Goal } from "@/types/database";
 import { SuggestionsPanel } from "@/components/suggestions-panel";
 
 interface GoalsSidebarProps {
   goals: Goal[];
+  onGoalDeleted?: (goalId: string) => void;
 }
 
 const PRIORITY_CONFIG: Record<number, { label: string; color: string }> = {
@@ -22,7 +26,25 @@ const PRIORITY_CONFIG: Record<number, { label: string; color: string }> = {
   5: { label: "Critical", color: "text-gray-900 font-semibold" },
 };
 
-export function GoalsSidebar({ goals }: GoalsSidebarProps) {
+export function GoalsSidebar({ goals, onGoalDeleted }: GoalsSidebarProps) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(goalId: string) {
+    setDeletingId(goalId);
+    try {
+      const response = await fetch(`/api/goals/${goalId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        onGoalDeleted?.(goalId);
+      }
+    } catch {
+      // Delete failed silently
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <aside className="w-80 border-l border-gray-100 bg-white flex flex-col overflow-hidden">
       {/* Header */}
@@ -45,14 +67,30 @@ export function GoalsSidebar({ goals }: GoalsSidebarProps) {
           .sort((a, b) => b.priority - a.priority)
           .map((goal) => {
             const priority = PRIORITY_CONFIG[goal.priority] || PRIORITY_CONFIG[3];
+            const isDeleting = deletingId === goal.id;
             return (
               <div
                 key={goal.id}
-                className="border border-gray-100 rounded-xl p-3"
+                className={`border border-gray-100 rounded-xl p-3 relative group ${
+                  isDeleting ? "opacity-50" : ""
+                }`}
               >
-                <h3 className="text-gray-900 text-sm font-medium mb-2">
+                {/* Delete button */}
+                <button
+                  onClick={() => handleDelete(goal.id)}
+                  disabled={isDeleting}
+                  className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center text-gray-300 hover:text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-xs"
+                  title="Delete goal"
+                >
+                  ×
+                </button>
+
+                <Link
+                  href={`/dashboard/goals/${goal.id}`}
+                  className="text-gray-900 text-sm font-medium mb-2 pr-5 block hover:text-gray-600 transition-colors"
+                >
                   {goal.title}
-                </h3>
+                </Link>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className={priority.color}>
                     {priority.label}

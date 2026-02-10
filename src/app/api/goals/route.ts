@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getBusySlots, createEvent, deleteEvent } from "@/lib/google-calendar";
+import { getBusySlots } from "@/lib/google-calendar";
 import { findNextSlot, findRecurringSlots } from "@/lib/scheduler";
 import { Goal } from "@/types/database";
 
@@ -40,6 +40,14 @@ function validateGoal(goal: GoalBody): string | null {
   // Validate due_date is a parseable date
   if (isNaN(new Date(goal.due_date).getTime())) {
     return "due_date must be a valid date (YYYY-MM-DD)";
+  }
+  // Validate due_date is not in the past
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  const parsedDueDate = new Date(goal.due_date);
+  parsedDueDate.setHours(0, 0, 0, 0);
+  if (parsedDueDate < todayDate) {
+    return "due_date cannot be in the past";
   }
   if (typeof goal.estimated_hours !== "number" || !isFinite(goal.estimated_hours) || goal.estimated_hours <= 0) {
     return "estimated_hours must be a finite positive number";
@@ -161,13 +169,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // --- Auto-schedule on Google Calendar ---
+    // --- Find time slots and save as PENDING (user must approve) ---
     const savedGoal = data as Goal;
-    let scheduledBlocks: Array<{
+    let proposedBlocks: Array<{
+      id?: string;
       start_time: string;
       end_time: string;
       calendar_type: string;
-      google_event_id: string;
     }> = [];
     let schedulingError: string | undefined;
 
@@ -202,76 +210,48 @@ export async function POST(request: NextRequest) {
         );
 
         // Find time slot(s)
-        let proposedBlocks;
+        let foundBlocks;
         if (savedGoal.recurring) {
-          proposedBlocks = findRecurringSlots(savedGoal, busySlots, now, searchEnd);
+          foundBlocks = findRecurringSlots(savedGoal, busySlots, now, searchEnd);
         } else {
           const singleSlot = findNextSlot(savedGoal, busySlots, now, searchEnd);
-          proposedBlocks = singleSlot ? [singleSlot] : [];
+          foundBlocks = singleSlot ? [singleSlot] : [];
         }
 
-        if (proposedBlocks.length === 0) {
-          schedulingError = "No available time slot found — the goal was saved but not scheduled on your calendar";
+        if (foundBlocks.length === 0) {
+          schedulingError = "No available time slot found — the goal was saved but not scheduled";
         } else {
-          // Create Google Calendar events and save scheduled blocks
-          const calendarId = savedGoal.is_work
-            ? (profile.work_calendar_id || profile.email)
-            : (profile.personal_calendar_id || profile.email);
-
-          for (const block of proposedBlocks) {
+          // Save as PENDING blocks (no Google Calendar event yet — user must approve)
+          for (const block of foundBlocks) {
             try {
-              // Create Google Calendar event
-              const event = await createEvent(
-                profile.google_access_token,
-                profile.google_refresh_token,
-                calendarId,
-                block.goal_title,
-                "Scheduled by First Mate",
-                block.start_time,
-                block.end_time
-              );
-
-              // Save to scheduled_blocks table
-              const { error: blockError } = await supabase
+              const { data: savedBlock, error: blockError } = await supabase
                 .from("scheduled_blocks")
                 .insert({
                   user_id: user.id,
                   goal_id: savedGoal.id,
-                  google_event_id: event.id,
+                  google_event_id: null,
                   calendar_type: block.calendar_type,
                   start_time: block.start_time,
                   end_time: block.end_time,
                   is_completed: false,
-                });
+                  status: "pending",
+                })
+                .select("id")
+                .single();
 
-              if (blockError) {
-                // Rollback: delete the Google Calendar event
-                try {
-                  await deleteEvent(
-                    profile.google_access_token,
-                    profile.google_refresh_token,
-                    calendarId,
-                    event.id!
-                  );
-                } catch (rollbackErr) {
-                  console.error("Rollback delete failed:", rollbackErr);
-                }
-                console.error("Block save error:", blockError);
-              } else {
-                scheduledBlocks.push({
+              if (!blockError && savedBlock) {
+                proposedBlocks.push({
+                  id: savedBlock.id,
                   start_time: block.start_time,
                   end_time: block.end_time,
                   calendar_type: block.calendar_type,
-                  google_event_id: event.id!,
                 });
+              } else {
+                console.error("Block save error:", blockError);
               }
-            } catch (eventErr) {
-              console.error("Calendar event creation failed:", eventErr);
+            } catch (blockErr) {
+              console.error("Block creation failed:", blockErr);
             }
-          }
-
-          if (scheduledBlocks.length === 0 && proposedBlocks.length > 0) {
-            schedulingError = "Found time slots but failed to create calendar events";
           }
         }
       }
@@ -282,7 +262,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       goal: savedGoal,
-      scheduledBlocks: scheduledBlocks.length > 0 ? scheduledBlocks : undefined,
+      proposedBlocks: proposedBlocks.length > 0 ? proposedBlocks : undefined,
       schedulingError,
     });
   } catch (error) {

@@ -42,11 +42,11 @@ export function Chat({ onGoalCreated }: ChatProps) {
     }
   }, [input]);
 
-  // Derive the last 3 assistant messages for display
+  // Show only the last assistant message
   const displayMessages = messages
     .map((m, i) => ({ message: m, originalIndex: i }))
     .filter((item) => item.message.role === "assistant" && item.message.content.length > 0)
-    .slice(-3);
+    .slice(-1);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -136,11 +136,11 @@ export function Chat({ onGoalCreated }: ChatProps) {
               });
             } else if (saveResponse.ok) {
               const savedData = await saveResponse.json();
-              onGoalCreated(goal, savedData.goal, savedData.scheduledBlocks);
+              onGoalCreated(goal, savedData.goal, savedData.proposedBlocks);
 
               // Append scheduling confirmation to the assistant message
-              if (savedData.scheduledBlocks?.length > 0) {
-                const block = savedData.scheduledBlocks[0];
+              if (savedData.proposedBlocks?.length > 0) {
+                const block = savedData.proposedBlocks[0];
                 const startDate = new Date(block.start_time);
                 const timeStr = startDate.toLocaleString("en-US", {
                   weekday: "short",
@@ -149,14 +149,14 @@ export function Chat({ onGoalCreated }: ChatProps) {
                   hour: "numeric",
                   minute: "2-digit",
                 });
-                const count = savedData.scheduledBlocks.length;
+                const count = savedData.proposedBlocks.length;
                 const suffix = count > 1 ? ` (and ${count - 1} more)` : "";
                 setMessages((prev) => {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     role: "assistant",
                     content: updated[updated.length - 1].content +
-                      `\n\nScheduled on your ${block.calendar_type} calendar: ${timeStr}${suffix}`,
+                      `\n\nProposed for your ${block.calendar_type} calendar: ${timeStr}${suffix} — check Calendar tab to approve`,
                   };
                   return updated;
                 });
@@ -212,13 +212,6 @@ export function Chat({ onGoalCreated }: ChatProps) {
     }
   }
 
-  // Opacity levels for the 3-message display (oldest → newest)
-  const OPACITY_MAP: Record<number, number[]> = {
-    1: [1],
-    2: [0.35, 1],
-    3: [0.2, 0.5, 1],
-  };
-
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* Globe */}
@@ -226,7 +219,7 @@ export function Chat({ onGoalCreated }: ChatProps) {
         <Globe isActive={isLoading} />
       </div>
 
-      {/* Messages — last 3 assistant responses */}
+      {/* Last assistant response only */}
       <div className="flex-1 flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full overflow-y-auto">
         {displayMessages.length === 0 && !isLoading && (
           <p className="text-center text-gray-400 text-sm mt-4">
@@ -235,22 +228,16 @@ export function Chat({ onGoalCreated }: ChatProps) {
         )}
 
         <div className="space-y-5">
-          {displayMessages.map((item, index) => {
-            const opacities = OPACITY_MAP[displayMessages.length] || [1];
-            const opacity = opacities[index] ?? 1;
-
-            return (
-              <div
-                key={`msg-${item.originalIndex}`}
-                className="chat-message-fade"
-                style={{ opacity }}
-              >
-                <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
-                  {item.message.content}
-                </p>
-              </div>
-            );
-          })}
+          {displayMessages.map((item) => (
+            <div
+              key={`msg-${item.originalIndex}`}
+              className="chat-message-fade"
+            >
+              <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
+                {item.message.content}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
