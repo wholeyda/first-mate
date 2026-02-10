@@ -41,12 +41,9 @@ function validateGoal(goal: GoalBody): string | null {
   if (isNaN(new Date(goal.due_date).getTime())) {
     return "due_date must be a valid date (YYYY-MM-DD)";
   }
-  // Validate due_date is not in the past
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
-  const parsedDueDate = new Date(goal.due_date);
-  parsedDueDate.setHours(0, 0, 0, 0);
-  if (parsedDueDate < todayDate) {
+  // Validate due_date is not in the past (compare as date strings to avoid timezone issues)
+  const todayStr = new Date().toISOString().split("T")[0];
+  if (goal.due_date < todayStr) {
     return "due_date cannot be in the past";
   }
   if (typeof goal.estimated_hours !== "number" || !isFinite(goal.estimated_hours) || goal.estimated_hours <= 0) {

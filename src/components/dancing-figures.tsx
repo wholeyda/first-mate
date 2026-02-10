@@ -169,7 +169,7 @@ function SilhouetteFigure({ goal, xPercent, danceStyle, delay }: FigureProps) {
       <g
         style={{
           transformOrigin: `${cx}px ${hipY}px`,
-          animation: `${bodyAnim} 0.8s ease-in-out ${delay}s infinite alternate`,
+          animation: `${bodyAnim} 0.6s ease-in-out ${delay}s infinite`,
         }}
       >
         {/* Head */}
@@ -195,7 +195,7 @@ function SilhouetteFigure({ goal, xPercent, danceStyle, delay }: FigureProps) {
           strokeLinecap="round"
           style={{
             transformOrigin: `${cx - build.shoulderW / 2}px ${shoulderY}px`,
-            animation: `${armsAnim} 0.6s ease-in-out ${delay}s infinite alternate`,
+            animation: `${armsAnim} 0.5s ease-in-out ${delay}s infinite`,
           }}
         />
 
@@ -210,7 +210,7 @@ function SilhouetteFigure({ goal, xPercent, danceStyle, delay }: FigureProps) {
           strokeLinecap="round"
           style={{
             transformOrigin: `${cx + build.shoulderW / 2}px ${shoulderY}px`,
-            animation: `${armsAnim} 0.7s ease-in-out ${delay + 0.1}s infinite alternate-reverse`,
+            animation: `${armsAnim} 0.55s ease-in-out ${delay + 0.1}s infinite reverse`,
           }}
         />
 

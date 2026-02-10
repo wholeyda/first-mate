@@ -2,7 +2,7 @@
  * Chat Component
  *
  * Minimalist chat interface centered on an animated particle globe.
- * Shows only the last 3 assistant messages with fading opacity.
+ * Shows only the last assistant message.
  * The globe serves as both visual centerpiece and loading indicator.
  */
 
@@ -171,9 +171,30 @@ export function Chat({ onGoalCreated }: ChatProps) {
                   return updated;
                 });
               }
+            } else {
+              // Goal save failed — show the error to the user
+              const errData = await saveResponse.json().catch(() => ({ error: "Unknown error" }));
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: updated[updated.length - 1].content +
+                    `\n\n(Failed to save goal: ${errData.error || "please try again"})`,
+                };
+                return updated;
+              });
             }
           } catch {
-            // Goal save failed silently — user can retry via chat
+            // Goal save failed — network error
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                role: "assistant",
+                content: updated[updated.length - 1].content +
+                  "\n\n(Failed to save goal — please check your connection and try again.)",
+              };
+              return updated;
+            });
           }
         }
       }

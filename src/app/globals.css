@@ -82,171 +82,204 @@ h1, h2, h3 {
 
 /* =============================================
    Genre-Specific Dance Animations
+   DRAMATIC movements — big bounces, wide arm swings
    Each genre has: body, arms, legs keyframes
    ============================================= */
 
-/* DEFAULT — generic party bounce */
+/* DEFAULT — energetic party bounce */
 @keyframes default-body {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-6px); }
+  0% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-18px) rotate(2deg); }
+  50% { transform: translateY(-4px) rotate(-1deg); }
+  75% { transform: translateY(-14px) rotate(-2deg); }
+  100% { transform: translateY(0) rotate(0deg); }
 }
 @keyframes default-arms {
-  0% { transform: rotate(-15deg); }
-  100% { transform: rotate(25deg); }
+  0% { transform: rotate(-30deg); }
+  50% { transform: rotate(55deg); }
+  100% { transform: rotate(-30deg); }
 }
 @keyframes default-legs {
-  0% { transform: rotate(-8deg); }
-  100% { transform: rotate(8deg); }
+  0% { transform: rotate(-20deg); }
+  100% { transform: rotate(20deg); }
 }
 
-/* POP — bouncy, upbeat */
+/* POP — bouncy and high-energy */
 @keyframes pop-body {
   0% { transform: translateY(0) scaleY(1); }
-  50% { transform: translateY(-8px) scaleY(1.02); }
-  100% { transform: translateY(0) scaleY(0.98); }
+  20% { transform: translateY(-22px) scaleY(1.06); }
+  40% { transform: translateY(-6px) scaleY(0.94); }
+  60% { transform: translateY(-18px) scaleY(1.04); }
+  80% { transform: translateY(-3px) scaleY(0.96); }
+  100% { transform: translateY(0) scaleY(1); }
 }
 @keyframes pop-arms {
-  0% { transform: rotate(-20deg); }
-  100% { transform: rotate(30deg); }
+  0% { transform: rotate(-40deg) translateY(0); }
+  50% { transform: rotate(60deg) translateY(-10px); }
+  100% { transform: rotate(-40deg) translateY(0); }
 }
 @keyframes pop-legs {
-  0% { transform: rotate(-10deg); }
-  100% { transform: rotate(10deg); }
+  0% { transform: rotate(-25deg); }
+  100% { transform: rotate(25deg); }
 }
 
-/* ROCK — headbang, aggressive */
+/* ROCK — headbanging frenzy */
 @keyframes rock-body {
-  0% { transform: translateY(0) rotate(-2deg); }
-  100% { transform: translateY(-4px) rotate(3deg); }
+  0% { transform: translateY(0) rotate(-5deg); }
+  30% { transform: translateY(-12px) rotate(8deg); }
+  60% { transform: translateY(-4px) rotate(-8deg); }
+  100% { transform: translateY(0) rotate(-5deg); }
 }
 @keyframes rock-arms {
-  0% { transform: rotate(10deg); }
-  100% { transform: rotate(-50deg); }
+  0% { transform: rotate(20deg); }
+  50% { transform: rotate(-70deg); }
+  100% { transform: rotate(20deg); }
 }
 @keyframes rock-legs {
-  0% { transform: rotate(-5deg); }
-  100% { transform: rotate(5deg); }
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(15deg); }
 }
 
-/* HIPHOP — bounce with swagger */
+/* HIPHOP — deep bounce with swagger */
 @keyframes hiphop-body {
-  0% { transform: translateY(0) translateX(-2px); }
-  50% { transform: translateY(-5px) translateX(0); }
-  100% { transform: translateY(0) translateX(2px); }
+  0% { transform: translateY(0) translateX(-6px) rotate(0deg); }
+  25% { transform: translateY(-16px) translateX(0) rotate(3deg); }
+  50% { transform: translateY(-4px) translateX(6px) rotate(-2deg); }
+  75% { transform: translateY(-12px) translateX(0) rotate(2deg); }
+  100% { transform: translateY(0) translateX(-6px) rotate(0deg); }
 }
 @keyframes hiphop-arms {
-  0% { transform: rotate(-10deg) translateY(0); }
-  100% { transform: rotate(-45deg) translateY(-6px); }
+  0% { transform: rotate(-15deg) translateY(0); }
+  33% { transform: rotate(-65deg) translateY(-14px); }
+  66% { transform: rotate(10deg) translateY(-4px); }
+  100% { transform: rotate(-15deg) translateY(0); }
 }
 @keyframes hiphop-legs {
-  0% { transform: rotate(-12deg); }
-  100% { transform: rotate(6deg); }
+  0% { transform: rotate(-25deg); }
+  100% { transform: rotate(18deg); }
 }
 
-/* ELECTRONIC — fast pulse */
+/* ELECTRONIC — rapid pulsing rave */
 @keyframes electronic-body {
   0% { transform: translateY(0) scaleY(1); }
-  25% { transform: translateY(-10px) scaleY(1.03); }
-  50% { transform: translateY(-2px) scaleY(0.97); }
-  75% { transform: translateY(-8px) scaleY(1.01); }
+  15% { transform: translateY(-20px) scaleY(1.08); }
+  30% { transform: translateY(-3px) scaleY(0.92); }
+  45% { transform: translateY(-18px) scaleY(1.05); }
+  60% { transform: translateY(-2px) scaleY(0.95); }
+  75% { transform: translateY(-15px) scaleY(1.03); }
   100% { transform: translateY(0) scaleY(1); }
 }
 @keyframes electronic-arms {
-  0% { transform: rotate(-30deg); }
-  50% { transform: rotate(30deg); }
-  100% { transform: rotate(-30deg); }
+  0% { transform: rotate(-55deg); }
+  33% { transform: rotate(55deg); }
+  66% { transform: rotate(-55deg); }
+  100% { transform: rotate(55deg); }
 }
 @keyframes electronic-legs {
-  0% { transform: rotate(-6deg); }
-  50% { transform: rotate(6deg); }
-  100% { transform: rotate(-6deg); }
+  0% { transform: rotate(-18deg); }
+  50% { transform: rotate(18deg); }
+  100% { transform: rotate(-18deg); }
 }
 
-/* COUNTRY — line dance sway */
+/* COUNTRY — line dance kick */
 @keyframes country-body {
-  0% { transform: translateX(-4px) rotate(-1deg); }
-  100% { transform: translateX(4px) rotate(1deg); }
+  0% { transform: translateX(-8px) translateY(0) rotate(-3deg); }
+  50% { transform: translateX(8px) translateY(-10px) rotate(3deg); }
+  100% { transform: translateX(-8px) translateY(0) rotate(-3deg); }
 }
 @keyframes country-arms {
-  0% { transform: rotate(-5deg); }
-  100% { transform: rotate(15deg); }
+  0% { transform: rotate(-15deg); }
+  50% { transform: rotate(45deg); }
+  100% { transform: rotate(-15deg); }
 }
 @keyframes country-legs {
-  0% { transform: rotate(-15deg); }
-  100% { transform: rotate(10deg); }
+  0% { transform: rotate(-30deg); }
+  100% { transform: rotate(25deg); }
 }
 
-/* CLASSICAL — graceful waltz */
+/* CLASSICAL — sweeping waltz */
 @keyframes classical-body {
-  0% { transform: translateX(-2px) translateY(-2px) rotate(-1deg); }
-  100% { transform: translateX(2px) translateY(0) rotate(1deg); }
+  0% { transform: translateX(-6px) translateY(-4px) rotate(-3deg); }
+  50% { transform: translateX(6px) translateY(-12px) rotate(3deg); }
+  100% { transform: translateX(-6px) translateY(-4px) rotate(-3deg); }
 }
 @keyframes classical-arms {
-  0% { transform: rotate(-40deg); }
-  100% { transform: rotate(-20deg); }
+  0% { transform: rotate(-60deg); }
+  50% { transform: rotate(-20deg); }
+  100% { transform: rotate(-60deg); }
 }
 @keyframes classical-legs {
-  0% { transform: rotate(-4deg); }
-  100% { transform: rotate(4deg); }
+  0% { transform: rotate(-12deg); }
+  100% { transform: rotate(12deg); }
 }
 
-/* JAZZ — smooth swing */
+/* JAZZ — dynamic swing */
 @keyframes jazz-body {
-  0% { transform: translateX(-3px) rotate(-3deg); }
-  100% { transform: translateX(3px) rotate(3deg); }
+  0% { transform: translateX(-8px) translateY(0) rotate(-6deg); }
+  33% { transform: translateX(4px) translateY(-14px) rotate(4deg); }
+  66% { transform: translateX(8px) translateY(-4px) rotate(-4deg); }
+  100% { transform: translateX(-8px) translateY(0) rotate(-6deg); }
 }
 @keyframes jazz-arms {
-  0% { transform: rotate(10deg); }
-  50% { transform: rotate(-25deg); }
-  100% { transform: rotate(10deg); }
-}
-@keyframes jazz-legs {
-  0% { transform: rotate(-10deg); }
-  100% { transform: rotate(12deg); }
-}
-
-/* BLUES — slow groove */
-@keyframes blues-body {
-  0% { transform: translateY(0) rotate(-1deg); }
-  100% { transform: translateY(-3px) rotate(1deg); }
-}
-@keyframes blues-arms {
-  0% { transform: rotate(-8deg); }
-  100% { transform: rotate(12deg); }
-}
-@keyframes blues-legs {
-  0% { transform: rotate(-6deg); }
-  100% { transform: rotate(6deg); }
-}
-
-/* R&B — smooth body roll */
-@keyframes rnb-body {
-  0% { transform: translateY(0) translateX(-2px); }
-  50% { transform: translateY(-4px) translateX(2px); }
-  100% { transform: translateY(0) translateX(-2px); }
-}
-@keyframes rnb-arms {
-  0% { transform: rotate(-15deg); }
+  0% { transform: rotate(20deg); }
+  33% { transform: rotate(-50deg); }
+  66% { transform: rotate(40deg); }
   100% { transform: rotate(20deg); }
 }
-@keyframes rnb-legs {
-  0% { transform: rotate(-8deg); }
-  100% { transform: rotate(8deg); }
+@keyframes jazz-legs {
+  0% { transform: rotate(-22deg); }
+  100% { transform: rotate(22deg); }
 }
 
-/* FOLK — foot-stomping jig */
+/* BLUES — deep slow groove */
+@keyframes blues-body {
+  0% { transform: translateY(0) translateX(-3px) rotate(-3deg); }
+  50% { transform: translateY(-10px) translateX(3px) rotate(3deg); }
+  100% { transform: translateY(0) translateX(-3px) rotate(-3deg); }
+}
+@keyframes blues-arms {
+  0% { transform: rotate(-20deg); }
+  100% { transform: rotate(30deg); }
+}
+@keyframes blues-legs {
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(15deg); }
+}
+
+/* R&B — smooth body wave */
+@keyframes rnb-body {
+  0% { transform: translateY(0) translateX(-5px) rotate(-2deg); }
+  25% { transform: translateY(-12px) translateX(2px) rotate(3deg); }
+  50% { transform: translateY(-4px) translateX(5px) rotate(-1deg); }
+  75% { transform: translateY(-10px) translateX(-2px) rotate(2deg); }
+  100% { transform: translateY(0) translateX(-5px) rotate(-2deg); }
+}
+@keyframes rnb-arms {
+  0% { transform: rotate(-30deg); }
+  50% { transform: rotate(40deg); }
+  100% { transform: rotate(-30deg); }
+}
+@keyframes rnb-legs {
+  0% { transform: rotate(-18deg); }
+  100% { transform: rotate(18deg); }
+}
+
+/* FOLK — wild stomping jig */
 @keyframes folk-body {
   0% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  25% { transform: translateY(-20px); }
+  50% { transform: translateY(-2px); }
+  75% { transform: translateY(-16px); }
   100% { transform: translateY(0); }
 }
 @keyframes folk-arms {
-  0% { transform: rotate(-10deg); }
-  100% { transform: rotate(35deg); }
+  0% { transform: rotate(-20deg); }
+  50% { transform: rotate(60deg); }
+  100% { transform: rotate(-20deg); }
 }
 @keyframes folk-legs {
-  0% { transform: rotate(-18deg); }
-  100% { transform: rotate(15deg); }
+  0% { transform: rotate(-30deg); }
+  100% { transform: rotate(28deg); }
 }
 
 /* Selection color */
