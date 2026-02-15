@@ -4,8 +4,11 @@
  * Full-screen overlay that guides the user through the AEIOU reflection:
  * Activities, Environments, Interactions, Objects, Users.
  *
+ * Plus engagement/excitement questions to understand what drives flow state.
+ * Urges the user to be as specific as possible for better career insights.
+ *
  * After collecting all answers, sends to AI for assessment.
- * On success → triggers island creation. On failure → red globe flash.
+ * On success → triggers planet creation. On failure → red globe flash.
  */
 
 "use client";
@@ -21,18 +24,20 @@ interface AeiouModalProps {
   onSuccess: (aeiouResponseId: string) => void;
 }
 
-type Step = "greeting" | "A" | "E" | "I" | "O" | "U" | "evaluating" | "success" | "failure";
+type Step = "greeting" | "A" | "E" | "I" | "O" | "U" | "excitement" | "peak_moments" | "evaluating" | "success" | "failure";
 
-const STEPS: { key: Step; letter: string; question: string }[] = [
+const STEPS: { key: Step; letter: string; question: string; hint?: string }[] = [
   {
     key: "A",
     letter: "A",
     question: "What were you actually doing? Describe the specific activities you engaged in.",
+    hint: "Be as specific as possible — what tasks, actions, or behaviors were you performing?",
   },
   {
     key: "E",
     letter: "E",
     question: "Where were you during this activity? What kind of place was it and how did it make you feel?",
+    hint: "Think about the physical space, atmosphere, noise level, lighting...",
   },
   {
     key: "I",
@@ -49,6 +54,18 @@ const STEPS: { key: Step; letter: string; question: string }[] = [
     letter: "U",
     question: "Who else was there? What role did they play in making it a positive or negative experience?",
   },
+  {
+    key: "excitement",
+    letter: "!",
+    question: "Did you feel excited and engaged while working on this? Rate your energy and focus — were you in flow, or was it a grind?",
+    hint: "Be honest. There's no wrong answer. Understanding your energy patterns helps us find the best work for you.",
+  },
+  {
+    key: "peak_moments",
+    letter: "\u2605",
+    question: "What specific actions or situations made you feel most alive, curious, or engaged? And which moments drained you?",
+    hint: "The more specific you are, the better First Mate can guide your career. \"Debugging the API\" is better than \"coding.\"",
+  },
 ];
 
 export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps) {
@@ -60,6 +77,8 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
     interactions: "",
     objects: "",
     users_present: "",
+    excitement_level: "",
+    peak_moments: "",
   });
   const [aiMessage, setAiMessage] = useState("");
   const [showRedFlash, setShowRedFlash] = useState(false);
@@ -79,6 +98,8 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
       I: "interactions",
       O: "objects",
       U: "users_present",
+      excitement: "excitement_level",
+      peak_moments: "peak_moments",
     };
 
     if (currentStep) {
@@ -119,14 +140,12 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
 
         if (data.wasSuccessful) {
           setStep("success");
-          // Slight delay then trigger success
           setTimeout(() => {
             onSuccess(data.aeiouResponse.id);
           }, 2000);
         } else {
           setStep("failure");
           setShowRedFlash(true);
-          // Auto-close after showing failure message
           setTimeout(() => {
             setShowRedFlash(false);
             onClose();
@@ -170,7 +189,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
             </h2>
             <p className="text-gray-400 text-sm mb-8">
               Let&apos;s reflect on this accomplishment together.
-              I&apos;ll ask you 5 quick questions about your experience.
+              I&apos;ll ask you 7 quick questions about your experience — the more specific you are, the better I can help you find your ideal work.
             </p>
             <button
               onClick={() => setStep("A")}
@@ -181,7 +200,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
           </div>
         )}
 
-        {/* AEIOU Questions */}
+        {/* AEIOU + Engagement Questions */}
         {currentStep && (
           <div className="w-full aeiou-slide-up" key={currentStep.key}>
             <div className="flex items-center gap-3 mb-4">
@@ -192,7 +211,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
                 {STEPS.map((s, i) => (
                   <div
                     key={s.key}
-                    className={`w-8 h-1 rounded-full transition-colors ${
+                    className={`w-6 h-1 rounded-full transition-colors ${
                       i <= stepIndex ? "bg-white" : "bg-white/20"
                     }`}
                   />
@@ -200,7 +219,11 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
               </div>
             </div>
 
-            <p className="text-white text-lg mb-6">{currentStep.question}</p>
+            <p className="text-white text-lg mb-2">{currentStep.question}</p>
+            {currentStep.hint && (
+              <p className="text-white/30 text-xs mb-5 italic">{currentStep.hint}</p>
+            )}
+            {!currentStep.hint && <div className="mb-4" />}
 
             <textarea
               value={currentAnswer}
@@ -244,7 +267,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
               {aiMessage}
             </p>
             <p className="text-white/50 text-sm">
-              Preparing your island reward...
+              Preparing your planet reward...
             </p>
           </div>
         )}

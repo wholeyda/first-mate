@@ -5,18 +5,20 @@
  * Each goal displays its title, priority, due date, and type (work/personal).
  * Goals can be deleted (archived) with the × button.
  * Goals can be completed via AEIOU flow with the ✓ button.
- * Subtasks shown as expandable dropdown per goal.
+ * Subtasks are pre-loaded from the dashboard and shown as expandable dropdowns.
+ * They are treated as first-class items — visible and trackable.
  */
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Goal, SubGoal } from "@/types/database";
 import { SuggestionsPanel } from "@/components/suggestions-panel";
 
 interface GoalsSidebarProps {
   goals: Goal[];
+  subGoals?: Array<Record<string, unknown>>;
   onGoalDeleted?: (goalId: string) => void;
   onGoalComplete?: (goal: Goal) => void;
 }
@@ -29,20 +31,29 @@ const PRIORITY_CONFIG: Record<number, { label: string; color: string }> = {
   5: { label: "Critical", color: "text-gray-900 font-semibold" },
 };
 
-export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSidebarProps) {
+export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComplete }: GoalsSidebarProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
-  const [subtasksByGoal, setSubtasksByGoal] = useState<Record<string, SubGoal[]>>({});
+  const [fetchedSubtasks, setFetchedSubtasks] = useState<Record<string, SubGoal[]>>({});
   const [loadingSubtasks, setLoadingSubtasks] = useState<Set<string>>(new Set());
 
-  const fetchSubtasks = useCallback(async (goalId: string) => {
-    if (subtasksByGoal[goalId]) return; // Already loaded
+  // Group initial subgoals by parent_goal_id
+  const subGoalsByParent: Record<string, Array<Record<string, unknown>>> = {};
+  for (const sg of subGoals) {
+    const parentId = sg.parent_goal_id as string;
+    if (!subGoalsByParent[parentId]) subGoalsByParent[parentId] = [];
+    subGoalsByParent[parentId].push(sg);
+  }
+
+  const fetchSubtasksForGoal = useCallback(async (goalId: string) => {
+    // Don't refetch if we already have data from props or previous fetch
+    if (subGoalsByParent[goalId] || fetchedSubtasks[goalId]) return;
     setLoadingSubtasks((prev) => new Set(prev).add(goalId));
     try {
       const res = await fetch(`/api/goals/${goalId}/subtasks`);
       if (res.ok) {
         const data = await res.json();
-        setSubtasksByGoal((prev) => ({ ...prev, [goalId]: data.subtasks || [] }));
+        setFetchedSubtasks((prev) => ({ ...prev, [goalId]: data.subtasks || [] }));
       }
     } catch {
       // Silent fail
@@ -53,7 +64,7 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
         return next;
       });
     }
-  }, [subtasksByGoal]);
+  }, [fetchedSubtasks, subGoalsByParent]);
 
   function toggleExpanded(goalId: string) {
     setExpandedGoals((prev) => {
@@ -62,7 +73,9 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
         next.delete(goalId);
       } else {
         next.add(goalId);
-        fetchSubtasks(goalId);
+        if (!subGoalsByParent[goalId]) {
+          fetchSubtasksForGoal(goalId);
+        }
       }
       return next;
     });
@@ -84,6 +97,32 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
     }
   }
 
+  function getSubtasksForGoal(goalId: string): Array<{ id: string; title: string; status: string; estimated_hours?: number }> {
+    // Prefer pre-loaded from props, fall back to client-fetched
+    const fromProps = subGoalsByParent[goalId];
+    if (fromProps) {
+      return fromProps.map((sg) => ({
+        id: sg.id as string,
+        title: sg.title as string,
+        status: sg.status as string,
+        estimated_hours: sg.estimated_hours as number | undefined,
+      }));
+    }
+    const fromFetch = fetchedSubtasks[goalId];
+    if (fromFetch) {
+      return fromFetch.map((sg) => ({
+        id: sg.id,
+        title: sg.title,
+        status: sg.status,
+        estimated_hours: sg.estimated_hours,
+      }));
+    }
+    return [];
+  }
+
+  // Count total subtasks
+  const totalSubtasks = Object.values(subGoalsByParent).reduce((sum, sgs) => sum + sgs.length, 0);
+
   return (
     <aside className="w-80 border-l border-gray-100 bg-white flex flex-col overflow-hidden">
       {/* Header */}
@@ -91,6 +130,7 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
         <h2 className="text-lg font-semibold text-gray-900">Active Goals</h2>
         <p className="text-xs text-gray-400 mt-1">
           {goals.length} {goals.length === 1 ? "goal" : "goals"}
+          {totalSubtasks > 0 && ` \u00B7 ${totalSubtasks} subtasks`}
         </p>
       </div>
 
@@ -108,8 +148,10 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
             const priority = PRIORITY_CONFIG[goal.priority] || PRIORITY_CONFIG[3];
             const isDeleting = deletingId === goal.id;
             const isExpanded = expandedGoals.has(goal.id);
-            const subtasks = subtasksByGoal[goal.id] || [];
+            const subtasks = getSubtasksForGoal(goal.id);
             const isLoadingSubs = loadingSubtasks.has(goal.id);
+            const hasSubtasks = subtasks.length > 0;
+
             return (
               <div
                 key={goal.id}
@@ -119,7 +161,6 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
               >
                 {/* Action buttons */}
                 <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {/* Complete button */}
                   {onGoalComplete && (
                     <button
                       onClick={() => onGoalComplete(goal)}
@@ -129,7 +170,6 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
                       &#10003;
                     </button>
                   )}
-                  {/* Delete button */}
                   <button
                     onClick={() => handleDelete(goal.id)}
                     disabled={isDeleting}
@@ -177,30 +217,37 @@ export function GoalsSidebar({ goals, onGoalDeleted, onGoalComplete }: GoalsSide
                     &#9654;
                   </span>
                   Subtasks
-                  {subtasks.length > 0 && (
+                  {hasSubtasks && (
                     <span className="text-gray-300">({subtasks.length})</span>
                   )}
                 </button>
 
                 {/* Subtasks list */}
                 {isExpanded && (
-                  <div className="mt-2 pl-3 border-l-2 border-gray-100 space-y-1">
+                  <div className="mt-2 pl-3 border-l-2 border-gray-100 space-y-1.5">
                     {isLoadingSubs && (
                       <p className="text-xs text-gray-300">Loading...</p>
                     )}
                     {!isLoadingSubs && subtasks.length === 0 && (
-                      <p className="text-xs text-gray-300">No subtasks yet</p>
+                      <p className="text-xs text-gray-300">
+                        No subtasks yet — <Link href={`/dashboard/goals/${goal.id}`} className="text-gray-500 hover:text-gray-700 underline">decompose</Link>
+                      </p>
                     )}
                     {subtasks.map((sub) => (
-                      <div key={sub.id} className="flex items-center gap-2 text-xs">
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      <div key={sub.id} className="flex items-start gap-2 text-xs py-0.5">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 ${
                           sub.status === "completed" ? "bg-green-400" :
                           sub.status === "in_progress" ? "bg-blue-400" :
                           "bg-gray-300"
                         }`} />
-                        <span className={sub.status === "completed" ? "text-gray-400 line-through" : "text-gray-600"}>
-                          {sub.title}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span className={sub.status === "completed" ? "text-gray-400 line-through" : "text-gray-600"}>
+                            {sub.title}
+                          </span>
+                          {sub.estimated_hours && (
+                            <span className="text-gray-300 ml-1">({sub.estimated_hours}h)</span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

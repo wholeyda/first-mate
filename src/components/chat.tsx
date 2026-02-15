@@ -4,6 +4,7 @@
  * Minimalist chat interface centered on an animated particle globe.
  * Shows only the last assistant message.
  * The globe serves as both visual centerpiece and loading indicator.
+ * Planets orbit the globe — clicking one opens a branded removal modal.
  */
 
 "use client";
@@ -11,6 +12,7 @@
 import { useState, useRef, useEffect } from "react";
 import { parseGoalsFromResponse, stripGoalJson, ParsedGoal } from "@/lib/parse-goal";
 import { Globe } from "@/components/globe";
+import { PlanetRemoveModal } from "@/components/planet-remove-modal";
 import { Island } from "@/types/database";
 
 interface Message {
@@ -35,6 +37,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [removingPlanet, setRemovingPlanet] = useState<Island | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize textarea
@@ -50,6 +53,23 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
     .map((m, i) => ({ message: m, originalIndex: i }))
     .filter((item) => item.message.role === "assistant" && item.message.content.length > 0)
     .slice(-1);
+
+  function handlePlanetClick(island: Island) {
+    setRemovingPlanet(island);
+  }
+
+  async function handlePlanetRemoveConfirm() {
+    if (!removingPlanet || !onIslandRemoved) return;
+    try {
+      const res = await fetch(`/api/islands?id=${removingPlanet.id}`, { method: "DELETE" });
+      if (res.ok) {
+        onIslandRemoved(removingPlanet.id);
+      }
+    } catch {
+      // Silent fail
+    }
+    setRemovingPlanet(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,7 +116,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
               const parsed = JSON.parse(data);
               if (parsed.text) {
                 assistantContent += parsed.text;
-                // Update the last message (assistant) with streamed content
                 setMessages((prev) => {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
@@ -116,7 +135,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
       // Check if the response contains goal JSON
       const goals = parseGoalsFromResponse(assistantContent);
       if (goals.length > 0 && onGoalCreated) {
-        // Save each goal via the server-side API route
         for (const goal of goals) {
           try {
             const saveResponse = await fetch("/api/goals", {
@@ -126,7 +144,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
             });
 
             if (saveResponse.status === 409) {
-              // Duplicate goal — inform the user
               const dupData = await saveResponse.json();
               setMessages((prev) => {
                 const updated = [...prev];
@@ -141,7 +158,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
               const savedData = await saveResponse.json();
               onGoalCreated(goal, savedData.goal, savedData.proposedBlocks);
 
-              // Append scheduling confirmation to the assistant message
               if (savedData.proposedBlocks?.length > 0) {
                 const block = savedData.proposedBlocks[0];
                 const startDate = new Date(block.start_time);
@@ -175,7 +191,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
                 });
               }
             } else {
-              // Goal save failed — show the error to the user
               const errData = await saveResponse.json().catch(() => ({ error: "Unknown error" }));
               setMessages((prev) => {
                 const updated = [...prev];
@@ -188,7 +203,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
               });
             }
           } catch {
-            // Goal save failed — network error
             setMessages((prev) => {
               const updated = [...prev];
               updated[updated.length - 1] = {
@@ -229,7 +243,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    // Submit on Enter (without Shift)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -243,13 +256,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
         <Globe
           isActive={isLoading}
           islands={islands}
-          onIslandClick={(island) => {
-            if (onIslandRemoved && confirm(`Remove island "${island.name}" from your globe?`)) {
-              fetch(`/api/islands?id=${island.id}`, { method: "DELETE" })
-                .then((res) => { if (res.ok) onIslandRemoved(island.id); })
-                .catch(() => {});
-            }
-          }}
+          onIslandClick={handlePlanetClick}
         />
       </div>
 
@@ -297,6 +304,16 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
           </button>
         </form>
       </div>
+
+      {/* Planet removal modal */}
+      {removingPlanet && (
+        <PlanetRemoveModal
+          planet={removingPlanet}
+          isOpen={true}
+          onConfirm={handlePlanetRemoveConfirm}
+          onCancel={() => setRemovingPlanet(null)}
+        />
+      )}
     </div>
   );
 }

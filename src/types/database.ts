@@ -92,6 +92,8 @@ export interface AeiouResponse {
   interactions: string;
   objects: string;
   users_present: string;
+  excitement_level: string;
+  peak_moments: string;
   ai_assessment: string | null;
   was_successful: boolean;
   created_at: string;

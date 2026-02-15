@@ -31,6 +31,19 @@ export default async function DashboardPage() {
     .eq("status", "active")
     .order("priority", { ascending: false });
 
+  // Fetch all sub_goals for active goals to display as items
+  const goalIds = (goals || []).map((g) => g.id);
+  let subGoals: Array<Record<string, unknown>> = [];
+  if (goalIds.length > 0) {
+    const { data: subs } = await supabase
+      .from("sub_goals")
+      .select("*, goals(title)")
+      .in("parent_goal_id", goalIds)
+      .neq("status", "completed")
+      .order("sort_order", { ascending: true });
+    subGoals = subs || [];
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Top bar */}
@@ -45,7 +58,7 @@ export default async function DashboardPage() {
       </header>
 
       {/* Main content */}
-      <DashboardClient initialGoals={goals || []} />
+      <DashboardClient initialGoals={goals || []} initialSubGoals={subGoals} />
     </div>
   );
 }

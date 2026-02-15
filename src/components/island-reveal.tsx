@@ -1,9 +1,9 @@
 /**
- * Island Reveal
+ * Planet Reveal
  *
- * Full-screen black background that reveals a new island on the globe
- * after a successful AEIOU completion. The globe spins and a colorful
- * island materializes with a celebratory animation.
+ * Full-screen black background that reveals a new planet in the solar system
+ * after a successful AEIOU completion. The main globe spins and a colorful
+ * mini planet materializes and orbits around it.
  */
 
 "use client";
@@ -25,13 +25,8 @@ export function IslandReveal({ island, goalTitle, isOpen, onClose }: IslandRevea
   useEffect(() => {
     if (!isOpen) return;
 
-    // Phase 1: Globe appears (0s)
     setPhase("enter");
-
-    // Phase 2: Island materializes (1.5s)
     const revealTimer = setTimeout(() => setPhase("reveal"), 1500);
-
-    // Phase 3: Celebration text (3s)
     const celebrateTimer = setTimeout(() => setPhase("celebrate"), 3000);
 
     return () => {
@@ -43,11 +38,13 @@ export function IslandReveal({ island, goalTitle, isOpen, onClose }: IslandRevea
   if (!isOpen) return null;
 
   const colors = island.color_palette || ["#4ECDC4", "#45B7D1", "#96CEB4"];
+  const ringedTypes = ["volcanic", "crystalline", "nebula", "steampunk", "arctic", "desert"];
+  const hasRings = ringedTypes.includes(island.island_type);
 
   return (
     <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center aeiou-fade-in">
       <div className="flex flex-col items-center">
-        {/* Globe with spinning */}
+        {/* Globe with the new planet orbiting */}
         <div
           className="transition-all duration-1000"
           style={{
@@ -60,18 +57,18 @@ export function IslandReveal({ island, goalTitle, isOpen, onClose }: IslandRevea
           <Globe isActive={phase === "enter"} islands={[island]} />
         </div>
 
-        {/* Island name reveal */}
+        {/* Planet name reveal */}
         {(phase === "reveal" || phase === "celebrate") && (
           <div className="text-center island-materialize">
-            {/* Colorful island icon */}
-            <div className="flex justify-center gap-1 mb-4">
+            {/* Color orbs representing the planet */}
+            <div className="flex justify-center gap-2 mb-4">
               {colors.map((color, i) => (
                 <div
                   key={i}
-                  className="w-4 h-4 rounded-full"
+                  className="w-3 h-3 rounded-full"
                   style={{
                     backgroundColor: color,
-                    animationDelay: `${i * 0.15}s`,
+                    boxShadow: `0 0 8px ${color}`,
                   }}
                 />
               ))}
@@ -81,7 +78,7 @@ export function IslandReveal({ island, goalTitle, isOpen, onClose }: IslandRevea
               {island.name}
             </h2>
             <p className="text-white/40 text-sm mb-1">
-              {island.island_type} island
+              {island.island_type} planet{hasRings ? " — ringed" : ""}
             </p>
           </div>
         )}
@@ -90,7 +87,7 @@ export function IslandReveal({ island, goalTitle, isOpen, onClose }: IslandRevea
         {phase === "celebrate" && (
           <div className="text-center mt-4 aeiou-slide-up">
             <p className="text-white/60 text-sm mb-6">
-              A new island has appeared on your globe for completing &ldquo;{goalTitle}&rdquo;
+              A new planet has joined your solar system for completing &ldquo;{goalTitle}&rdquo;
             </p>
             <button
               onClick={onClose}

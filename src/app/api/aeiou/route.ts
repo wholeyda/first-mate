@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { goal_id, activities, environments, interactions, objects, users_present } = body;
+    const { goal_id, activities, environments, interactions, objects, users_present, excitement_level, peak_moments } = body;
 
     if (!goal_id) {
       return NextResponse.json({ error: "goal_id is required" }, { status: 400 });
@@ -54,8 +54,12 @@ Their AEIOU reflection:
 - Interactions: ${interactions || "Not provided"}
 - Objects: ${objects || "Not provided"}
 - Other people involved: ${users_present || "Not provided"}
+- Excitement & engagement level: ${excitement_level || "Not provided"}
+- Peak moments (what energized vs drained them): ${peak_moments || "Not provided"}
 
 Based on these reflections, does it seem like the user genuinely completed or made meaningful progress on this goal? Be generous — if they describe relevant activities, give them credit. Only flag as unsuccessful if their answers are clearly unrelated to the goal or indicate they didn't actually work on it.
+
+Also factor in their excitement and peak moments — this data helps us understand what work best suits them.
 
 Respond with a JSON object:
 {"was_successful": true/false, "message": "A brief encouraging or supportive message (1-2 sentences)"}`;
@@ -83,7 +87,7 @@ Respond with a JSON object:
       // Default to successful if parsing fails
     }
 
-    // Save AEIOU response
+    // Save AEIOU response (excitement_level and peak_moments stored in DB)
     const { data: aeiouResponse, error: insertError } = await supabase
       .from("aeiou_responses")
       .insert({
@@ -94,6 +98,8 @@ Respond with a JSON object:
         interactions: interactions || "",
         objects: objects || "",
         users_present: users_present || "",
+        excitement_level: excitement_level || "",
+        peak_moments: peak_moments || "",
         ai_assessment: aiMessage,
         was_successful: wasSuccessful,
       })

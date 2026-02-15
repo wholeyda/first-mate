@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
       interactions: string;
       objects: string;
       users_present: string;
+      excitement_level: string;
+      peak_moments: string;
       was_successful: boolean;
       ai_assessment: string | null;
       created_at: string;
@@ -60,6 +62,8 @@ export async function POST(request: NextRequest) {
           interactions: entry.interactions as string,
           objects: entry.objects as string,
           users_present: entry.users_present as string,
+          excitement_level: (entry.excitement_level as string) || "",
+          peak_moments: (entry.peak_moments as string) || "",
           was_successful: entry.was_successful as boolean,
           ai_assessment: entry.ai_assessment as string | null,
           created_at: entry.created_at as string,

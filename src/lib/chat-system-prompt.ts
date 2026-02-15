@@ -14,6 +14,8 @@ interface AeiouEntry {
   interactions: string;
   objects: string;
   users_present: string;
+  excitement_level: string;
+  peak_moments: string;
   was_successful: boolean;
   ai_assessment: string | null;
   created_at: string;
@@ -32,7 +34,9 @@ export function getSystemPrompt(aeiouHistory?: AeiouEntry[]): string {
   Environments: ${e.environments}
   Interactions: ${e.interactions}
   Objects: ${e.objects}
-  People present: ${e.users_present}${e.ai_assessment ? `\n  Assessment: ${e.ai_assessment}` : ""}`
+  People present: ${e.users_present}
+  Excitement & engagement: ${e.excitement_level || "N/A"}
+  Peak moments (energizing vs draining): ${e.peak_moments || "N/A"}${e.ai_assessment ? `\n  Assessment: ${e.ai_assessment}` : ""}`
       )
       .join("\n");
 
@@ -49,7 +53,10 @@ When recommending careers or projects, consider:
 - What environments they thrive in
 - Whether they prefer working with people or independently
 - What tools/objects they naturally gravitate toward
-- How their social dynamics affect their productivity`;
+- How their social dynamics affect their productivity
+- Their self-reported excitement and engagement levels
+- The specific peak moments that made them feel most alive and curious
+- Patterns across multiple reflections — what consistently energizes vs drains them`;
   }
 
   return `You are First Mate, an AI productivity assistant. You help the user plan their work and personal life by turning their goals into schedulable time blocks.

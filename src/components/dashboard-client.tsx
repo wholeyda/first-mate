@@ -3,6 +3,7 @@
  *
  * Minimalist layout with tabs: Chat, Calendar.
  * Goals sidebar on the right with AEIOU completion flow.
+ * Sub-goals are treated as first-class items in the sidebar.
  */
 
 "use client";
@@ -23,12 +24,14 @@ import {
 
 interface DashboardClientProps {
   initialGoals: Goal[];
+  initialSubGoals?: Array<Record<string, unknown>>;
 }
 
 type Tab = "chat" | "calendar";
 
-export function DashboardClient({ initialGoals }: DashboardClientProps) {
+export function DashboardClient({ initialGoals, initialSubGoals = [] }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
+  const [subGoals, setSubGoals] = useState<Array<Record<string, unknown>>>(initialSubGoals);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [islands, setIslands] = useState<Island[]>([]);
   const [completingGoal, setCompletingGoal] = useState<Goal | null>(null);
@@ -84,6 +87,8 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
 
   function handleGoalDeleted(goalId: string) {
     setGoals((prev) => prev.filter((g) => g.id !== goalId));
+    // Also remove sub-goals belonging to deleted goal
+    setSubGoals((prev) => prev.filter((sg) => sg.parent_goal_id !== goalId));
   }
 
   function handleGoalCompleted(goal: Goal) {
@@ -93,7 +98,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
   async function handleAeiouSuccess(aeiouResponseId: string) {
     if (!completingGoal) return;
 
-    // Create island via API
+    // Create planet via API
     try {
       const res = await fetch("/api/islands", {
         method: "POST",
@@ -164,6 +169,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
       {/* Goals sidebar */}
       <GoalsSidebar
         goals={activeGoals}
+        subGoals={subGoals}
         onGoalDeleted={handleGoalDeleted}
         onGoalComplete={handleGoalCompleted}
       />
@@ -178,7 +184,7 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
         />
       )}
 
-      {/* Island Reveal */}
+      {/* Planet Reveal */}
       {revealIsland && (
         <IslandReveal
           island={revealIsland.island}
