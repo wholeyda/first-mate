@@ -10,9 +10,20 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getBusySlots } from "@/lib/google-calendar";
+import { getBusySlots, TokenRefreshCallback } from "@/lib/google-calendar";
 import { findNextSlot, findRecurringSlots } from "@/lib/scheduler";
 import { Goal } from "@/types/database";
+
+function makeTokenRefresher(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): TokenRefreshCallback {
+  return async (newAccessToken: string, newRefreshToken?: string) => {
+    const update: Record<string, string> = { google_access_token: newAccessToken };
+    if (newRefreshToken) update.google_refresh_token = newRefreshToken;
+    await supabase.from("users").update(update).eq("id", userId);
+  };
+}
 
 interface GoalBody {
   title: string;
@@ -197,13 +208,15 @@ export async function POST(request: NextRequest) {
         const dueDate = new Date(savedGoal.due_date);
         const searchEnd = dueDate > twoWeeksOut ? dueDate : twoWeeksOut;
 
+        const onTokenRefresh = makeTokenRefresher(supabase, user.id);
         const busySlots = await getBusySlots(
           profile.google_access_token,
           profile.google_refresh_token,
           personalId,
           workId,
           now.toISOString(),
-          searchEnd.toISOString()
+          searchEnd.toISOString(),
+          onTokenRefresh
         );
 
         // Find time slot(s)

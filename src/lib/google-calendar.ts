@@ -5,6 +5,7 @@
  * - Fetching events from both personal and work calendars
  * - Creating new events (time blocks)
  * - Deleting app-created events
+ * - Automatic token refresh with persistence back to Supabase
  *
  * App-created events are tagged with an extended property
  * "firstMateManaged=true" so we can identify and manage them.
@@ -17,9 +18,24 @@ const APP_TAG_KEY = "firstMateManaged";
 const APP_TAG_VALUE = "true";
 
 /**
- * Create an authenticated Google Calendar client using OAuth tokens.
+ * Callback invoked when Google automatically refreshes the access token.
+ * Used to persist the new token back to Supabase.
  */
-function getCalendarClient(accessToken: string, refreshToken: string | null) {
+export type TokenRefreshCallback = (
+  newAccessToken: string,
+  newRefreshToken?: string
+) => Promise<void>;
+
+/**
+ * Create an authenticated Google Calendar client using OAuth tokens.
+ * When onTokenRefresh is provided, listens for automatic token refresh
+ * events and calls the callback to persist refreshed tokens.
+ */
+function getCalendarClient(
+  accessToken: string,
+  refreshToken: string | null,
+  onTokenRefresh?: TokenRefreshCallback
+) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET
@@ -29,6 +45,20 @@ function getCalendarClient(accessToken: string, refreshToken: string | null) {
     access_token: accessToken,
     refresh_token: refreshToken,
   });
+
+  // Listen for automatic token refresh events from googleapis
+  if (onTokenRefresh) {
+    oauth2Client.on("tokens", (tokens) => {
+      if (tokens.access_token) {
+        onTokenRefresh(
+          tokens.access_token,
+          tokens.refresh_token || undefined
+        ).catch((err) =>
+          console.error("Failed to persist refreshed tokens:", err)
+        );
+      }
+    });
+  }
 
   return google.calendar({ version: "v3", auth: oauth2Client });
 }
@@ -41,16 +71,17 @@ export async function fetchEvents(
   accessToken: string,
   refreshToken: string | null,
   calendarId: string,
-  timeMin: string, // ISO date string
-  timeMax: string // ISO date string
+  timeMin: string,
+  timeMax: string,
+  onTokenRefresh?: TokenRefreshCallback
 ): Promise<calendar_v3.Schema$Event[]> {
-  const calendar = getCalendarClient(accessToken, refreshToken);
+  const calendar = getCalendarClient(accessToken, refreshToken, onTokenRefresh);
 
   const response = await calendar.events.list({
     calendarId,
     timeMin,
     timeMax,
-    singleEvents: true, // Expand recurring events
+    singleEvents: true,
     orderBy: "startTime",
     maxResults: 250,
   });
@@ -69,12 +100,13 @@ export async function getBusySlots(
   personalCalendarId: string,
   workCalendarId: string,
   timeMin: string,
-  timeMax: string
+  timeMax: string,
+  onTokenRefresh?: TokenRefreshCallback
 ): Promise<{ start: Date; end: Date; calendarType: string }[]> {
   // Use allSettled so one calendar failure doesn't break scheduling
   const [personalResult, workResult] = await Promise.allSettled([
-    fetchEvents(accessToken, refreshToken, personalCalendarId, timeMin, timeMax),
-    fetchEvents(accessToken, refreshToken, workCalendarId, timeMin, timeMax),
+    fetchEvents(accessToken, refreshToken, personalCalendarId, timeMin, timeMax, onTokenRefresh),
+    fetchEvents(accessToken, refreshToken, workCalendarId, timeMin, timeMax, onTokenRefresh),
   ]);
 
   const personalEvents = personalResult.status === "fulfilled" ? personalResult.value : [];
@@ -118,10 +150,11 @@ export async function createEvent(
   calendarId: string,
   summary: string,
   description: string,
-  startTime: string, // ISO datetime string
-  endTime: string // ISO datetime string
+  startTime: string,
+  endTime: string,
+  onTokenRefresh?: TokenRefreshCallback
 ): Promise<calendar_v3.Schema$Event> {
-  const calendar = getCalendarClient(accessToken, refreshToken);
+  const calendar = getCalendarClient(accessToken, refreshToken, onTokenRefresh);
 
   const response = await calendar.events.insert({
     calendarId,
@@ -130,7 +163,6 @@ export async function createEvent(
       description,
       start: { dateTime: startTime },
       end: { dateTime: endTime },
-      // Tag this event so we know we created it
       extendedProperties: {
         private: {
           [APP_TAG_KEY]: APP_TAG_VALUE,
@@ -150,9 +182,10 @@ export async function deleteEvent(
   accessToken: string,
   refreshToken: string | null,
   calendarId: string,
-  eventId: string
+  eventId: string,
+  onTokenRefresh?: TokenRefreshCallback
 ): Promise<void> {
-  const calendar = getCalendarClient(accessToken, refreshToken);
+  const calendar = getCalendarClient(accessToken, refreshToken, onTokenRefresh);
 
   // Safety check: verify this is an app-created event before deleting
   const event = await calendar.events.get({ calendarId, eventId });
@@ -171,9 +204,10 @@ export async function deleteEvent(
  */
 export async function listCalendars(
   accessToken: string,
-  refreshToken: string | null
+  refreshToken: string | null,
+  onTokenRefresh?: TokenRefreshCallback
 ): Promise<calendar_v3.Schema$CalendarListEntry[]> {
-  const calendar = getCalendarClient(accessToken, refreshToken);
+  const calendar = getCalendarClient(accessToken, refreshToken, onTokenRefresh);
 
   const response = await calendar.calendarList.list();
 

@@ -4,10 +4,54 @@
  * Instructs Claude on how to behave as the First Mate AI assistant.
  * It guides the user through goal creation by asking the right questions,
  * then outputs structured JSON when all info is gathered.
+ * Also uses AEIOU history to provide career/project recommendations.
  */
 
-export function getSystemPrompt(): string {
+interface AeiouEntry {
+  goal_title: string;
+  activities: string;
+  environments: string;
+  interactions: string;
+  objects: string;
+  users_present: string;
+  was_successful: boolean;
+  ai_assessment: string | null;
+  created_at: string;
+}
+
+export function getSystemPrompt(aeiouHistory?: AeiouEntry[]): string {
   const today = new Date().toISOString().split("T")[0];
+
+  let aeiouSection = "";
+  if (aeiouHistory && aeiouHistory.length > 0) {
+    const entries = aeiouHistory
+      .map(
+        (e) =>
+          `- Goal: "${e.goal_title}" (${e.was_successful ? "completed" : "not completed"}, ${new Date(e.created_at).toLocaleDateString()})
+  Activities: ${e.activities}
+  Environments: ${e.environments}
+  Interactions: ${e.interactions}
+  Objects: ${e.objects}
+  People present: ${e.users_present}${e.ai_assessment ? `\n  Assessment: ${e.ai_assessment}` : ""}`
+      )
+      .join("\n");
+
+    aeiouSection = `
+
+## AEIOU Profile
+
+The user has completed AEIOU reflections for these goals. Use this data to understand their work patterns, preferences, and strengths. If the user asks about career guidance, project suggestions, or what work suits them best, draw on this information to give personalized recommendations.
+
+${entries}
+
+When recommending careers or projects, consider:
+- What activities energize them (vs drain them)
+- What environments they thrive in
+- Whether they prefer working with people or independently
+- What tools/objects they naturally gravitate toward
+- How their social dynamics affect their productivity`;
+  }
+
   return `You are First Mate, an AI productivity assistant. You help the user plan their work and personal life by turning their goals into schedulable time blocks.
 
 IMPORTANT: Today's date is ${today}. Always interpret dates relative to today. Due dates must be today or in the future — never use dates in the past.
@@ -68,5 +112,5 @@ Rules for the JSON:
 
 ## General Chat
 
-You can also answer general questions, provide encouragement, and help the user think through their priorities. Not every message needs to result in a goal — be natural.`;
+You can also answer general questions, provide encouragement, and help the user think through their priorities. Not every message needs to result in a goal — be natural.${aeiouSection}`;
 }

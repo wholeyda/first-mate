@@ -3,6 +3,7 @@
  *
  * Handles conversation with Claude API.
  * Streams responses back to the client for a responsive chat experience.
+ * Fetches AEIOU history to inject into the system prompt for career recommendations.
  *
  * POST body: { messages: [{ role: "user" | "assistant", content: string }] }
  */
@@ -30,11 +31,49 @@ export async function POST(request: NextRequest) {
   try {
     const { messages } = await request.json();
 
+    // Fetch AEIOU history for career recommendations
+    let aeiouHistory: Array<{
+      goal_title: string;
+      activities: string;
+      environments: string;
+      interactions: string;
+      objects: string;
+      users_present: string;
+      was_successful: boolean;
+      ai_assessment: string | null;
+      created_at: string;
+    }> = [];
+
+    try {
+      const { data: aeiouData } = await supabase
+        .from("aeiou_responses")
+        .select("*, goals(title)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (aeiouData && aeiouData.length > 0) {
+        aeiouHistory = aeiouData.map((entry: Record<string, unknown>) => ({
+          goal_title: (entry.goals as Record<string, unknown>)?.title as string || "Unknown goal",
+          activities: entry.activities as string,
+          environments: entry.environments as string,
+          interactions: entry.interactions as string,
+          objects: entry.objects as string,
+          users_present: entry.users_present as string,
+          was_successful: entry.was_successful as boolean,
+          ai_assessment: entry.ai_assessment as string | null,
+          created_at: entry.created_at as string,
+        }));
+      }
+    } catch {
+      // If AEIOU tables don't exist yet, continue without them
+    }
+
     // Call Claude API with streaming
     const stream = anthropic.messages.stream({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
-      system: getSystemPrompt(),
+      system: getSystemPrompt(aeiouHistory.length > 0 ? aeiouHistory : undefined),
       messages: messages.map((msg: { role: string; content: string }) => ({
         role: msg.role,
         content: msg.content,

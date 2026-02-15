@@ -12,7 +12,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { deleteEvent } from "@/lib/google-calendar";
+import { deleteEvent, TokenRefreshCallback } from "@/lib/google-calendar";
+
+function makeTokenRefresher(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): TokenRefreshCallback {
+  return async (newAccessToken: string, newRefreshToken?: string) => {
+    const update: Record<string, string> = { google_access_token: newAccessToken };
+    if (newRefreshToken) update.google_refresh_token = newRefreshToken;
+    await supabase.from("users").update(update).eq("id", userId);
+  };
+}
 
 export async function DELETE(
   request: NextRequest,
@@ -53,11 +64,13 @@ export async function DELETE(
         ? profile.work_calendar_id || profile.email
         : profile.personal_calendar_id || profile.email;
 
+    const onTokenRefresh = makeTokenRefresher(supabase, user.id);
     await deleteEvent(
       profile.google_access_token,
       profile.google_refresh_token,
       calendarId,
-      eventId
+      eventId,
+      onTokenRefresh
     );
 
     return NextResponse.json({ success: true });

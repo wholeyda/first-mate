@@ -1,15 +1,73 @@
 /**
  * Goal Detail API
  *
+ * PATCH  - Update goal status (e.g., mark as completed)
  * DELETE - Archive a goal and clean up its calendar events
  *
  * Params:
- *   goalId - UUID of the goal to delete
+ *   goalId - UUID of the goal to update/delete
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { deleteEvent } from "@/lib/google-calendar";
+import { deleteEvent, TokenRefreshCallback } from "@/lib/google-calendar";
+
+function makeTokenRefresher(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): TokenRefreshCallback {
+  return async (newAccessToken: string, newRefreshToken?: string) => {
+    const update: Record<string, string> = { google_access_token: newAccessToken };
+    if (newRefreshToken) update.google_refresh_token = newRefreshToken;
+    await supabase.from("users").update(update).eq("id", userId);
+  };
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ goalId: string }> }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { goalId } = await params;
+    const body = await request.json();
+    const { status } = body;
+
+    if (!status || !["active", "completed", "archived"].includes(status)) {
+      return NextResponse.json(
+        { error: "status must be 'active', 'completed', or 'archived'" },
+        { status: 400 }
+      );
+    }
+
+    const { data: goal, error } = await supabase
+      .from("goals")
+      .update({ status })
+      .eq("id", goalId)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (error || !goal) {
+      return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ goal });
+  } catch (error) {
+    console.error("Goal update error:", error);
+    return NextResponse.json(
+      { error: "Failed to update goal" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function DELETE(
   _request: NextRequest,
@@ -54,6 +112,7 @@ export async function DELETE(
 
     // Delete Google Calendar events for each block
     if (blocks && profile?.google_access_token) {
+      const onTokenRefresh = makeTokenRefresher(supabase, user.id);
       for (const block of blocks) {
         if (block.google_event_id) {
           try {
@@ -66,7 +125,8 @@ export async function DELETE(
               profile.google_access_token,
               profile.google_refresh_token,
               calendarId,
-              block.google_event_id
+              block.google_event_id,
+              onTokenRefresh
             );
           } catch (err) {
             // Event may already be deleted — continue

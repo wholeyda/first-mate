@@ -82,3 +82,30 @@ export interface Pirate {
   year: number;
   created_at: string;
 }
+
+export interface AeiouResponse {
+  id: string;
+  user_id: string;
+  goal_id: string;
+  activities: string;
+  environments: string;
+  interactions: string;
+  objects: string;
+  users_present: string;
+  ai_assessment: string | null;
+  was_successful: boolean;
+  created_at: string;
+}
+
+export interface Island {
+  id: string;
+  user_id: string;
+  goal_id: string;
+  aeiou_response_id: string | null;
+  island_type: string;
+  color_palette: string[];
+  name: string;
+  position_theta: number;
+  position_phi: number;
+  created_at: string;
+}

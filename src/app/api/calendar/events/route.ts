@@ -14,7 +14,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchEvents, createEvent } from "@/lib/google-calendar";
+import { fetchEvents, createEvent, TokenRefreshCallback } from "@/lib/google-calendar";
+
+/** Create a callback that persists refreshed Google tokens to Supabase */
+function makeTokenRefresher(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): TokenRefreshCallback {
+  return async (newAccessToken: string, newRefreshToken?: string) => {
+    const update: Record<string, string> = { google_access_token: newAccessToken };
+    if (newRefreshToken) update.google_refresh_token = newRefreshToken;
+    await supabase.from("users").update(update).eq("id", userId);
+  };
+}
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -59,6 +71,7 @@ export async function GET(request: NextRequest) {
     const workId = profile.work_calendar_id || profile.email;
 
     const warnings: string[] = [];
+    const onTokenRefresh = makeTokenRefresher(supabase, user.id);
 
     const [personalResult, workResult] = await Promise.allSettled([
       fetchEvents(
@@ -66,14 +79,16 @@ export async function GET(request: NextRequest) {
         profile.google_refresh_token,
         personalId,
         timeMin,
-        timeMax
+        timeMax,
+        onTokenRefresh
       ),
       fetchEvents(
         profile.google_access_token,
         profile.google_refresh_token,
         workId,
         timeMin,
-        timeMax
+        timeMax,
+        onTokenRefresh
       ),
     ]);
 
@@ -184,6 +199,7 @@ export async function POST(request: NextRequest) {
         ? profile.work_calendar_id || profile.email
         : profile.personal_calendar_id || profile.email;
 
+    const onTokenRefresh = makeTokenRefresher(supabase, user.id);
     const event = await createEvent(
       profile.google_access_token,
       profile.google_refresh_token,
@@ -191,7 +207,8 @@ export async function POST(request: NextRequest) {
       summary,
       description || "",
       startTime,
-      endTime
+      endTime,
+      onTokenRefresh
     );
 
     return NextResponse.json({ event });

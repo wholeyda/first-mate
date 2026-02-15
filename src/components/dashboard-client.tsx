@@ -1,8 +1,8 @@
 /**
  * Dashboard Client Component
  *
- * Minimalist layout with tabs: Chat, Calendar, Review, Crew.
- * Goals sidebar on the right.
+ * Minimalist layout with tabs: Chat, Calendar.
+ * Goals sidebar on the right with AEIOU completion flow.
  */
 
 "use client";
@@ -11,9 +11,10 @@ import { useState, useEffect } from "react";
 import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
 import { CalendarView } from "@/components/calendar-view";
-import { DancingFigures } from "@/components/dancing-figures";
+import { AeiouModal } from "@/components/aeiou-modal";
+import { IslandReveal } from "@/components/island-reveal";
 import { ParsedGoal } from "@/lib/parse-goal";
-import { Goal } from "@/types/database";
+import { Goal, Island } from "@/types/database";
 import {
   requestNotificationPermission,
   registerServiceWorker,
@@ -24,11 +25,14 @@ interface DashboardClientProps {
   initialGoals: Goal[];
 }
 
-type Tab = "chat" | "calendar" | "ship";
+type Tab = "chat" | "calendar";
 
 export function DashboardClient({ initialGoals }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const [islands, setIslands] = useState<Island[]>([]);
+  const [completingGoal, setCompletingGoal] = useState<Goal | null>(null);
+  const [revealIsland, setRevealIsland] = useState<{ island: Island; goalTitle: string } | null>(null);
 
   // Initialize notifications on mount
   useEffect(() => {
@@ -40,6 +44,22 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
       }
     }
     initNotifications();
+  }, []);
+
+  // Fetch islands on mount
+  useEffect(() => {
+    async function fetchIslands() {
+      try {
+        const res = await fetch("/api/islands");
+        if (res.ok) {
+          const data = await res.json();
+          setIslands(data.islands || []);
+        }
+      } catch {
+        // Silent fail for islands
+      }
+    }
+    fetchIslands();
   }, []);
 
   function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>) {
@@ -66,13 +86,57 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
     setGoals((prev) => prev.filter((g) => g.id !== goalId));
   }
 
+  function handleGoalCompleted(goal: Goal) {
+    setCompletingGoal(goal);
+  }
+
+  async function handleAeiouSuccess(aeiouResponseId: string) {
+    if (!completingGoal) return;
+
+    // Create island via API
+    try {
+      const res = await fetch("/api/islands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goal_id: completingGoal.id,
+          aeiou_response_id: aeiouResponseId,
+          name: completingGoal.title,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const island = data.island as Island;
+        setIslands((prev) => [...prev, island]);
+        // Move goal to completed
+        setGoals((prev) =>
+          prev.map((g) =>
+            g.id === completingGoal.id ? { ...g, status: "completed" as const } : g
+          )
+        );
+        setCompletingGoal(null);
+        setRevealIsland({ island, goalTitle: completingGoal.title });
+      }
+    } catch {
+      // Fall back — just close
+      setCompletingGoal(null);
+    }
+  }
+
+  function handleIslandRemoved(islandId: string) {
+    setIslands((prev) => prev.filter((i) => i.id !== islandId));
+  }
+
+  const activeGoals = goals.filter((g) => g.status === "active");
+
   return (
     <div className="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
         <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100">
-          {(["chat", "calendar", "ship"] as Tab[]).map((tab) => (
+          {(["chat", "calendar"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -84,7 +148,6 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
             >
               {tab === "chat" && "Chat"}
               {tab === "calendar" && "Calendar"}
-              {tab === "ship" && "Crew"}
             </button>
           ))}
         </div>
@@ -92,15 +155,38 @@ export function DashboardClient({ initialGoals }: DashboardClientProps) {
         {/* Tab content */}
         <div className="flex-1 overflow-hidden">
           {activeTab === "chat" && (
-            <Chat onGoalCreated={handleGoalCreated} />
+            <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} />
           )}
           {activeTab === "calendar" && <CalendarView />}
-          {activeTab === "ship" && <DancingFigures goals={goals} />}
         </div>
       </div>
 
       {/* Goals sidebar */}
-      <GoalsSidebar goals={goals} onGoalDeleted={handleGoalDeleted} />
+      <GoalsSidebar
+        goals={activeGoals}
+        onGoalDeleted={handleGoalDeleted}
+        onGoalComplete={handleGoalCompleted}
+      />
+
+      {/* AEIOU Completion Modal */}
+      {completingGoal && (
+        <AeiouModal
+          goal={completingGoal}
+          isOpen={true}
+          onClose={() => setCompletingGoal(null)}
+          onSuccess={handleAeiouSuccess}
+        />
+      )}
+
+      {/* Island Reveal */}
+      {revealIsland && (
+        <IslandReveal
+          island={revealIsland.island}
+          goalTitle={revealIsland.goalTitle}
+          isOpen={true}
+          onClose={() => setRevealIsland(null)}
+        />
+      )}
     </div>
   );
 }

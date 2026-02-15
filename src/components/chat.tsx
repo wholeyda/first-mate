@@ -11,6 +11,7 @@
 import { useState, useRef, useEffect } from "react";
 import { parseGoalsFromResponse, stripGoalJson, ParsedGoal } from "@/lib/parse-goal";
 import { Globe } from "@/components/globe";
+import { Island } from "@/types/database";
 
 interface Message {
   role: "user" | "assistant";
@@ -26,9 +27,11 @@ interface ScheduledBlock {
 
 interface ChatProps {
   onGoalCreated?: (goal: ParsedGoal, savedGoal?: Record<string, unknown>, scheduledBlocks?: ScheduledBlock[]) => void;
+  islands?: Island[];
+  onIslandRemoved?: (islandId: string) => void;
 }
 
-export function Chat({ onGoalCreated }: ChatProps) {
+export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -237,7 +240,17 @@ export function Chat({ onGoalCreated }: ChatProps) {
     <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* Globe */}
       <div className="flex-none pt-6">
-        <Globe isActive={isLoading} />
+        <Globe
+          isActive={isLoading}
+          islands={islands}
+          onIslandClick={(island) => {
+            if (onIslandRemoved && confirm(`Remove island "${island.name}" from your globe?`)) {
+              fetch(`/api/islands?id=${island.id}`, { method: "DELETE" })
+                .then((res) => { if (res.ok) onIslandRemoved(island.id); })
+                .catch(() => {});
+            }
+          }}
+        />
       </div>
 
       {/* Last assistant response only */}

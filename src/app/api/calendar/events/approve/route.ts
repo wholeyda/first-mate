@@ -12,7 +12,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createEvent } from "@/lib/google-calendar";
+import { createEvent, TokenRefreshCallback } from "@/lib/google-calendar";
+
+function makeTokenRefresher(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): TokenRefreshCallback {
+  return async (newAccessToken: string, newRefreshToken?: string) => {
+    const update: Record<string, string> = { google_access_token: newAccessToken };
+    if (newRefreshToken) update.google_refresh_token = newRefreshToken;
+    await supabase.from("users").update(update).eq("id", userId);
+  };
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -56,6 +67,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const onTokenRefresh = makeTokenRefresher(supabase, user.id);
     let approved = 0;
     const errors: string[] = [];
 
@@ -94,7 +106,8 @@ export async function POST(request: NextRequest) {
           (goal?.title as string) || "First Mate Task",
           "Scheduled by First Mate",
           startTime,
-          endTime
+          endTime,
+          onTokenRefresh
         );
 
         // Update the block: set event ID, status, and potentially new times
