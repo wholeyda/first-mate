@@ -86,7 +86,14 @@ export function NewsPanel() {
     );
   }
 
-  if (news.length === 0 && !isLoading) return null;
+  if (news.length === 0 && !isLoading) {
+    return (
+      <div className="px-4 py-3">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">News</h3>
+        <p className="text-xs text-gray-400 dark:text-gray-500">No news available yet.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 pb-4">

@@ -327,17 +327,19 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-950 overflow-hidden">
-      {/* Globe */}
-      <div className="flex-none pt-6">
-        <Globe
-          isActive={isLoading}
-          islands={islands}
-          onIslandClick={handlePlanetClick}
-        />
-      </div>
+      {/* Scrollable content area: globe + messages */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {/* Globe */}
+        <div className="flex-none pt-6">
+          <Globe
+            isActive={isLoading}
+            islands={islands}
+            onIslandClick={handlePlanetClick}
+          />
+        </div>
 
-      {/* Last assistant response only */}
-      <div className="flex-1 flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full overflow-y-auto">
+        {/* Last assistant response only */}
+        <div className="flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full">
         {displayMessages.length === 0 && !isLoading && (
           <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-4">
             What would you like to accomplish?
@@ -361,9 +363,10 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
             </div>
           ))}
         </div>
+        </div>
       </div>
 
-      {/* Quick reply pills + Input */}
+      {/* Quick reply pills + Input — always visible at bottom */}
       <div className="flex-none p-4 max-w-2xl mx-auto w-full">
         {quickReplies.length > 0 && !isLoading && (
           <div className="flex flex-wrap gap-2 mb-3">

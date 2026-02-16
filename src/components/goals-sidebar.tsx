@@ -188,12 +188,12 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
       {/* Everything below header scrolls together */}
       <div className="flex-1 overflow-y-auto">
         {/* Suggestions */}
-        <div className="border-b border-gray-100 dark:border-gray-800">
+        <div className="border-b border-gray-100 dark:border-gray-800 pt-3">
           <SuggestionsPanel />
         </div>
 
         {/* News */}
-        <div className="border-b border-gray-100 dark:border-gray-800">
+        <div className="border-b border-gray-100 dark:border-gray-800 pt-3">
           <NewsPanel />
         </div>
 
