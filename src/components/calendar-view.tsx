@@ -254,23 +254,23 @@ export function CalendarView() {
   const pendingCount = pendingBlocks.length;
 
   return (
-    <div className="h-full flex flex-col bg-white overflow-hidden">
+    <div className="h-full flex flex-col bg-white dark:bg-gray-950 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-none">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex-none">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigateWeek(-1)}
-            className="text-gray-400 hover:text-gray-900 transition-colors cursor-pointer text-sm px-2 py-1"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer text-sm px-2 py-1"
           >
             &larr;
           </button>
-          <span className="text-sm font-medium text-gray-900 min-w-[160px] text-center">
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 min-w-[160px] text-center">
             {formatDate(weekStart)} —{" "}
             {formatDate(new Date(weekEnd.getTime() - 1))}
           </span>
           <button
             onClick={() => navigateWeek(1)}
-            className="text-gray-400 hover:text-gray-900 transition-colors cursor-pointer text-sm px-2 py-1"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer text-sm px-2 py-1"
           >
             &rarr;
           </button>
@@ -278,21 +278,21 @@ export function CalendarView() {
 
         <div className="flex items-center gap-3">
           {pendingCount > 0 && (
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
               {pendingCount} pending
             </span>
           )}
           {!isCurrentWeek && (
             <button
               onClick={goToToday}
-              className="text-xs text-gray-400 hover:text-gray-900 transition-colors cursor-pointer"
+              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer"
             >
               Today
             </button>
           )}
           <button
             onClick={fetchAll}
-            className="text-xs text-gray-400 hover:text-gray-900 transition-colors cursor-pointer"
+            className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer"
           >
             Refresh
           </button>
@@ -301,7 +301,7 @@ export function CalendarView() {
 
       {/* Warnings banner */}
       {warnings.length > 0 && !error && (
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex-none">
+        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex-none">
           {warnings.map((w, i) => (
             <p key={i} className="text-xs text-gray-500">
               {w}
@@ -316,7 +316,7 @@ export function CalendarView() {
           <p className="text-gray-400 text-sm">{error}</p>
           <button
             onClick={fetchAll}
-            className="mt-2 text-sm text-gray-900 hover:underline cursor-pointer"
+            className="mt-2 text-sm text-gray-900 dark:text-gray-100 hover:underline cursor-pointer"
           >
             Retry
           </button>
@@ -334,7 +334,7 @@ export function CalendarView() {
       {!isLoading && !error && (
         <>
           {/* Sticky day headers */}
-          <div className="flex min-w-[700px] border-b border-gray-100 flex-none">
+          <div className="flex min-w-[700px] border-b border-gray-100 dark:border-gray-800 flex-none">
             <div className="w-14 flex-none" />
             {DAYS.map((day, dayIndex) => {
               const dayDate = new Date(weekStart);
@@ -345,8 +345,8 @@ export function CalendarView() {
                   key={day}
                   className={`flex-1 min-w-[90px] h-10 flex items-center justify-center border-l border-gray-50 text-xs ${
                     isToday
-                      ? "text-gray-900 font-semibold"
-                      : "text-gray-400"
+                      ? "text-gray-900 dark:text-gray-100 font-semibold"
+                      : "text-gray-400 dark:text-gray-500"
                   }`}
                 >
                   {day} {dayDate.getDate()}
@@ -364,7 +364,7 @@ export function CalendarView() {
                   const hour = START_HOUR + i;
                   return (
                     <div key={i} className="relative" style={{ height: HOUR_HEIGHT }}>
-                      <span className="absolute top-[-7px] right-2 text-[10px] text-gray-300">
+                      <span className="absolute top-[-7px] right-2 text-[10px] text-gray-300 dark:text-gray-600">
                         {hour === 0 ? "12a" : hour === 12 ? "12p" : hour > 12 ? `${hour - 12}p` : `${hour}a`}
                       </span>
                     </div>
@@ -392,7 +392,7 @@ export function CalendarView() {
                 return (
                   <div
                     key={day}
-                    className="flex-1 min-w-[90px] border-l border-gray-50"
+                    className="flex-1 min-w-[90px] border-l border-gray-50 dark:border-gray-800/50"
                   >
                     {/* Hour grid + events + pending blocks */}
                     <div className="relative">
@@ -402,7 +402,7 @@ export function CalendarView() {
                         (_, i) => (
                           <div
                             key={i}
-                            className="border-b border-gray-50"
+                            className="border-b border-gray-50 dark:border-gray-800/50"
                             style={{ height: HOUR_HEIGHT }}
                           />
                         )
@@ -455,7 +455,7 @@ export function CalendarView() {
                             className={`absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden group/event z-10 ${
                               event.calendarType === "work"
                                 ? "bg-gray-900 text-white"
-                                : "bg-gray-200 text-gray-900"
+                                : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                             }`}
                             style={{ top, height: Math.max(height, 18) }}
                           >
@@ -531,12 +531,12 @@ export function CalendarView() {
                         return (
                           <div
                             key={`pending-${block.id}`}
-                            className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-visible border-2 border-dashed border-amber-400 bg-amber-50 z-10"
+                            className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-visible border-2 border-dashed border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 z-10"
                             style={{ top, height: Math.max(height, isEditing ? 80 : 32) }}
                           >
                             <div className="flex flex-col h-full">
                               <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-medium text-gray-700 truncate leading-tight">
+                                <p className="text-[10px] font-medium text-gray-700 dark:text-gray-300 truncate leading-tight">
                                   {block.goal_title}
                                 </p>
                                 <p className="text-[9px] text-gray-400 leading-tight">
@@ -546,18 +546,18 @@ export function CalendarView() {
 
                               {/* Edit form */}
                               {isEditing && (
-                                <div className="mt-1 space-y-1 bg-white rounded p-1 border border-gray-200 shadow-sm">
+                                <div className="mt-1 space-y-1 bg-white dark:bg-gray-800 rounded p-1 border border-gray-200 dark:border-gray-700 shadow-sm">
                                   <input
                                     type="datetime-local"
                                     value={editStart}
                                     onChange={(e) => setEditStart(e.target.value)}
-                                    className="w-full text-[10px] border border-gray-200 rounded px-1 py-0.5"
+                                    className="w-full text-[10px] border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded px-1 py-0.5"
                                   />
                                   <input
                                     type="datetime-local"
                                     value={editEnd}
                                     onChange={(e) => setEditEnd(e.target.value)}
-                                    className="w-full text-[10px] border border-gray-200 rounded px-1 py-0.5"
+                                    className="w-full text-[10px] border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded px-1 py-0.5"
                                   />
                                 </div>
                               )}
@@ -619,7 +619,7 @@ export function CalendarView() {
         events.length === 0 &&
         pendingBlocks.length === 0 && (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-gray-400 text-sm">No events this week</p>
+            <p className="text-gray-400 dark:text-gray-500 text-sm">No events this week</p>
           </div>
         )}
     </div>

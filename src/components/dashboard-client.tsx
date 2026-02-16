@@ -140,15 +140,15 @@ export function DashboardClient({ initialGoals, initialSubGoals = [] }: Dashboar
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
-        <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100">
+        <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100 dark:border-gray-800">
           {(["chat", "calendar"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer ${
                 activeTab === tab
-                  ? "text-gray-900 border-b-2 border-gray-900"
-                  : "text-gray-400 hover:text-gray-600"
+                  ? "text-gray-900 dark:text-gray-100 border-b-2 border-gray-900 dark:border-gray-100"
+                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               }`}
             >
               {tab === "chat" && "Chat"}

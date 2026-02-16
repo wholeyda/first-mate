@@ -250,7 +250,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-950 overflow-hidden">
       {/* Globe */}
       <div className="flex-none pt-6">
         <Globe
@@ -263,7 +263,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
       {/* Last assistant response only */}
       <div className="flex-1 flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full overflow-y-auto">
         {displayMessages.length === 0 && !isLoading && (
-          <p className="text-center text-gray-400 text-sm mt-4">
+          <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-4">
             What would you like to accomplish?
           </p>
         )}
@@ -274,7 +274,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
               key={`msg-${item.originalIndex}`}
               className="chat-message-fade"
             >
-              <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
+              <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
                 {item.message.content}
               </p>
             </div>
@@ -292,13 +292,13 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
             onKeyDown={handleKeyDown}
             placeholder="Tell me what you want to accomplish..."
             rows={1}
-            className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:border-gray-400 text-sm max-h-32 bg-white"
+            className="flex-1 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 text-sm max-h-32 bg-white dark:bg-gray-900"
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="bg-gray-900 hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium px-5 py-3 rounded-xl transition-colors text-sm cursor-pointer"
+            className="bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white dark:text-gray-900 font-medium px-5 py-3 rounded-xl transition-colors text-sm cursor-pointer"
           >
             Send
           </button>

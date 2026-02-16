@@ -8,6 +8,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/sign-out-button";
+import { DarkModeToggle } from "@/components/dark-mode-toggle";
 import { GoalDetailClient } from "@/components/goal-detail-client";
 import { Goal } from "@/types/database";
 
@@ -39,13 +40,14 @@ export default async function GoalDetailPage({
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col">
       {/* Top bar */}
-      <header className="border-b border-gray-100 px-6 py-3">
+      <header className="border-b border-gray-100 dark:border-gray-800 px-6 py-3">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <h1 className="text-lg font-semibold text-gray-900">First Mate</h1>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">First Mate</h1>
           <div className="flex items-center gap-4">
-            <span className="text-gray-400 text-sm">{user.email}</span>
+            <span className="text-gray-400 dark:text-gray-500 text-sm">{user.email}</span>
+            <DarkModeToggle />
             <SignOutButton />
           </div>
         </div>

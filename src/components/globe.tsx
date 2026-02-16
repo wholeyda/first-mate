@@ -49,9 +49,9 @@ const ACTIVE_GLOW_MAX = 66;
 const GLOW_LERP = 0.06;
 
 // Planet rendering
-const PLANET_RADIUS = 22; // Radius of the mini planet in screen pixels
-const PLANET_ORBIT_DISTANCE = 0.88; // How far from center (fraction of SPHERE_RADIUS)
-const PLANET_POINTS = 120; // Points per mini planet
+const PLANET_RADIUS = 40; // Radius of the mini planet in screen pixels
+const PLANET_ORBIT_DISTANCE = 1.6; // How far from center (fraction of SPHERE_RADIUS)
+const PLANET_POINTS = 200; // Points per mini planet
 const PLANET_SPIN_SPEED = 0.012; // Each planet spins on its own axis
 
 function generateSpherePoints(count: number): Point3D[] {
@@ -174,7 +174,7 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
           const dist = Math.sqrt(
             (clickX - center.x) ** 2 + (clickY - center.y) ** 2
           );
-          if (dist < 35) {
+          if (dist < 50) {
             onIslandClick(island);
             return;
           }
@@ -273,6 +273,29 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
       ctx.shadowColor = "transparent";
       ctx.shadowBlur = 0;
 
+      // --- Draw orbit paths ---
+      for (const island of islandsRef.current) {
+        const orbitPhi = island.position_phi;
+        const orbitDist = PLANET_ORBIT_DISTANCE;
+
+        // Draw orbit ellipse
+        ctx.save();
+        ctx.translate(CSS_SIZE / 2, CSS_SIZE / 2);
+
+        // The orbit is a circle in 3D, projected as an ellipse
+        const orbitRadius = orbitDist * SPHERE_RADIUS * (FOCAL_LENGTH / (FOCAL_LENGTH));
+        const tiltedRadius = orbitRadius * Math.abs(Math.sin(orbitPhi));
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, orbitRadius, tiltedRadius * cosT, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
       // --- Draw orbiting planets ---
       for (const island of islandsRef.current) {
         const planetPts = planetPointsRef.current.get(island.id);
@@ -350,7 +373,7 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
           const blendG = Math.round(rgb.g + (nextRgb.g - rgb.g) * t);
           const blendB = Math.round(rgb.b + (nextRgb.b - rgb.b) * t);
 
-          const size = (1.0 + ((pointDepth + 1) / 2) * 2.2) * planetScale;
+          const size = (1.2 + ((pointDepth + 1) / 2) * 2.8) * planetScale;
 
           planetProjected.push({
             sx: centerProj.screenX + rx * scaledRadius,
@@ -377,7 +400,7 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
 
           // Back half of ring (behind planet)
           ctx.beginPath();
-          ctx.ellipse(0, 0, scaledRadius * 2.2, scaledRadius * 0.5, 0, Math.PI, Math.PI * 2);
+          ctx.ellipse(0, 0, scaledRadius * 2.0, scaledRadius * 0.45, 0, Math.PI, Math.PI * 2);
           ctx.strokeStyle = `rgba(${ringRgb.r}, ${ringRgb.g}, ${ringRgb.b}, ${planetAlpha * 0.3})`;
           ctx.lineWidth = 2.5 * planetScale;
           ctx.shadowColor = `rgba(${ringRgb.r}, ${ringRgb.g}, ${ringRgb.b}, 0.3)`;
@@ -411,7 +434,7 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
 
           // Front half of ring (in front of planet)
           ctx.beginPath();
-          ctx.ellipse(0, 0, scaledRadius * 2.2, scaledRadius * 0.5, 0, 0, Math.PI);
+          ctx.ellipse(0, 0, scaledRadius * 2.0, scaledRadius * 0.45, 0, 0, Math.PI);
           ctx.strokeStyle = `rgba(${ringRgb.r}, ${ringRgb.g}, ${ringRgb.b}, ${planetAlpha * 0.5})`;
           ctx.lineWidth = 2.5 * planetScale;
           ctx.shadowColor = `rgba(${ringRgb.r}, ${ringRgb.g}, ${ringRgb.b}, 0.4)`;
@@ -420,7 +443,7 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
 
           // Second thinner ring
           ctx.beginPath();
-          ctx.ellipse(0, 0, scaledRadius * 1.7, scaledRadius * 0.38, 0, 0, Math.PI);
+          ctx.ellipse(0, 0, scaledRadius * 1.6, scaledRadius * 0.35, 0, 0, Math.PI);
           ctx.strokeStyle = `rgba(${ringRgb.r}, ${ringRgb.g}, ${ringRgb.b}, ${planetAlpha * 0.25})`;
           ctx.lineWidth = 1.5 * planetScale;
           ctx.stroke();

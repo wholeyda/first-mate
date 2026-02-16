@@ -124,10 +124,10 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
   const totalSubtasks = Object.values(subGoalsByParent).reduce((sum, sgs) => sum + sgs.length, 0);
 
   return (
-    <aside className="w-80 border-l border-gray-100 bg-white flex flex-col overflow-hidden">
+    <aside className="w-80 border-l border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-4 border-b border-gray-100">
-        <h2 className="text-lg font-semibold text-gray-900">Active Goals</h2>
+      <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-800">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active Goals</h2>
         <p className="text-xs text-gray-400 mt-1">
           {goals.length} {goals.length === 1 ? "goal" : "goals"}
           {totalSubtasks > 0 && ` \u00B7 ${totalSubtasks} subtasks`}
@@ -155,7 +155,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
             return (
               <div
                 key={goal.id}
-                className={`border border-gray-100 rounded-xl p-3 relative group ${
+                className={`border border-gray-100 dark:border-gray-800 rounded-xl p-3 relative group ${
                   isDeleting ? "opacity-50" : ""
                 }`}
               >
@@ -173,7 +173,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
                   <button
                     onClick={() => handleDelete(goal.id)}
                     disabled={isDeleting}
-                    className="w-5 h-5 flex items-center justify-center text-gray-300 hover:text-gray-900 cursor-pointer text-xs"
+                    className="w-5 h-5 flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-gray-900 dark:hover:text-gray-200 cursor-pointer text-xs"
                     title="Delete goal"
                   >
                     ×
@@ -182,7 +182,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
 
                 <Link
                   href={`/dashboard/goals/${goal.id}`}
-                  className="text-gray-900 text-sm font-medium mb-2 pr-12 block hover:text-gray-600 transition-colors"
+                  className="text-gray-900 dark:text-gray-100 text-sm font-medium mb-2 pr-12 block hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
                 >
                   {goal.title}
                 </Link>
@@ -204,7 +204,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
                     Due: {new Date(goal.due_date).toLocaleDateString()}
                   </span>
                   {goal.is_hard_deadline && (
-                    <span className="text-gray-900 font-medium">Hard deadline</span>
+                    <span className="text-gray-900 dark:text-gray-100 font-medium">Hard deadline</span>
                   )}
                 </div>
 
@@ -224,7 +224,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
 
                 {/* Subtasks list */}
                 {isExpanded && (
-                  <div className="mt-2 pl-3 border-l-2 border-gray-100 space-y-1.5">
+                  <div className="mt-2 pl-3 border-l-2 border-gray-100 dark:border-gray-800 space-y-1.5">
                     {isLoadingSubs && (
                       <p className="text-xs text-gray-300">Loading...</p>
                     )}
@@ -241,7 +241,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
                           "bg-gray-300"
                         }`} />
                         <div className="flex-1 min-w-0">
-                          <span className={sub.status === "completed" ? "text-gray-400 line-through" : "text-gray-600"}>
+                          <span className={sub.status === "completed" ? "text-gray-400 line-through" : "text-gray-600 dark:text-gray-400"}>
                             {sub.title}
                           </span>
                           {sub.estimated_hours && (
@@ -258,7 +258,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
       </div>
 
       {/* Suggestions */}
-      <div className="border-t border-gray-100">
+      <div className="border-t border-gray-100 dark:border-gray-800">
         <SuggestionsPanel />
       </div>
     </aside>

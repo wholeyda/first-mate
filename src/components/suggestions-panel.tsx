@@ -70,20 +70,20 @@ export function SuggestionsPanel() {
   if (isLoading && suggestions.length === 0) {
     return (
       <div className="px-4 pb-4">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
           Recommendations
         </h3>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="border border-gray-100 rounded-xl p-3 animate-pulse"
+              className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 animate-pulse"
             >
               <div className="flex items-start gap-2">
-                <div className="w-4 h-4 bg-gray-100 rounded" />
+                <div className="w-4 h-4 bg-gray-100 dark:bg-gray-800 rounded" />
                 <div className="flex-1">
-                  <div className="h-3 bg-gray-100 rounded w-3/4 mb-1.5" />
-                  <div className="h-2.5 bg-gray-100 rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-3/4 mb-1.5" />
+                  <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded w-1/2" />
                 </div>
               </div>
             </div>
@@ -98,13 +98,13 @@ export function SuggestionsPanel() {
   return (
     <div className="px-4 pb-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-900">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Recommendations
         </h3>
         <button
           onClick={handleRefresh}
           disabled={isLoading}
-          className="text-gray-400 hover:text-gray-900 transition-colors cursor-pointer text-xs"
+          className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer text-xs"
           title="Refresh recommendations"
         >
           ↻
@@ -114,12 +114,12 @@ export function SuggestionsPanel() {
         {suggestions.map((suggestion, index) => (
           <div
             key={index}
-            className="border border-gray-100 rounded-xl p-3 hover:border-gray-300 transition-colors relative group"
+            className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 hover:border-gray-300 dark:hover:border-gray-600 transition-colors relative group"
           >
             {/* Dismiss button */}
             <button
               onClick={() => handleDismiss(suggestion.url)}
-              className="absolute top-2 right-2 w-4 h-4 flex items-center justify-center text-gray-300 hover:text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px]"
+              className="absolute top-2 right-2 w-4 h-4 flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-gray-900 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px]"
               title="Dismiss"
             >
               ×
@@ -136,7 +136,7 @@ export function SuggestionsPanel() {
                   {TYPE_ICONS[suggestion.type] || "·"}
                 </span>
                 <div className="flex-1 min-w-0 pr-4">
-                  <p className="text-gray-900 text-xs font-medium truncate">
+                  <p className="text-gray-900 dark:text-gray-100 text-xs font-medium truncate">
                     {suggestion.title}
                   </p>
                   <p className="text-gray-400 text-xs mt-0.5">

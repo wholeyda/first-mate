@@ -1,14 +1,21 @@
 @import "tailwindcss";
 
 /**
- * First Mate — Minimalist Theme
+ * First Mate — Minimalist Theme with Dark Mode
  *
- * Black, white, and incredibly simple.
+ * Default: dark mode. Toggle to light via theme provider.
  */
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #ffffff;
   --foreground: #111111;
+}
+
+.dark {
+  --background: #0a0a0f;
+  --foreground: #e5e5e5;
 }
 
 @theme inline {
@@ -43,8 +50,16 @@ h1, h2, h3 {
   border-radius: 2px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
 }
 
 /* Fade-in animation */
@@ -117,7 +132,7 @@ h1, h2, h3 {
   animation: globeRedFlash 1.5s ease-in-out 2;
 }
 
-/* Island reveal animations */
+/* Island/Planet reveal animations */
 @keyframes islandMaterialize {
   from {
     opacity: 0;
@@ -137,4 +152,9 @@ h1, h2, h3 {
 ::selection {
   background: rgba(0, 0, 0, 0.1);
   color: #111111;
+}
+
+.dark ::selection {
+  background: rgba(255, 255, 255, 0.15);
+  color: #e5e5e5;
 }
