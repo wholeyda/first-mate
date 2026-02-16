@@ -33,11 +33,67 @@ interface ChatProps {
   onIslandRemoved?: (islandId: string) => void;
 }
 
+/**
+ * Detect what kind of quick replies to show based on assistant message content.
+ * Returns an array of suggested reply strings, or empty array for no suggestions.
+ */
+function detectQuickReplies(text: string): string[] {
+  const lower = text.toLowerCase();
+
+  // Frequency-related
+  if (
+    /how often|frequency|how frequently|recurring|repeat|recurrence/.test(lower)
+  ) {
+    return ["Daily", "Weekly", "Monthly"];
+  }
+
+  // Time/duration-related
+  if (
+    /how long|how much time|duration|how many hours|how many minutes|per session|each session/.test(lower)
+  ) {
+    return ["30 min", "1 hour", "2 hours"];
+  }
+
+  // Priority-related
+  if (
+    /priority|how important|urgency|how urgent|critical/.test(lower) &&
+    /\?/.test(lower)
+  ) {
+    return ["Low", "Medium", "High", "Critical"];
+  }
+
+  // Work vs personal
+  if (
+    /work or personal|personal or work|which calendar|work calendar|personal calendar/.test(lower)
+  ) {
+    return ["Work", "Personal"];
+  }
+
+  // Deadline flexibility
+  if (
+    /hard deadline|flexible|move the date|deadline.*flex|firm.*deadline|fixed.*deadline/.test(lower) &&
+    /\?/.test(lower)
+  ) {
+    return ["Hard deadline", "Flexible"];
+  }
+
+  // Time of day
+  if (
+    /what time of day|morning or|afternoon or|evening|prefer.*morning|prefer.*afternoon|when.*during the day/.test(lower)
+  ) {
+    return ["Morning", "Afternoon", "Evening"];
+  }
+
+  return [];
+}
+
 export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [removingPlanet, setRemovingPlanet] = useState<Island | null>(null);
+  const [quickReplies, setQuickReplies] = useState<string[]>([]);
+  const [isScheduling, setIsScheduling] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize textarea
@@ -71,6 +127,18 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
     setRemovingPlanet(null);
   }
 
+  function handleQuickReply(reply: string) {
+    setInput(reply);
+    setQuickReplies([]);
+    // Submit on next tick so the input state is updated
+    setTimeout(() => {
+      const form = inputRef.current?.closest("form");
+      if (form) {
+        form.requestSubmit();
+      }
+    }, 0);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -81,6 +149,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
     setMessages(updatedMessages);
     setInput("");
     setIsLoading(true);
+    setQuickReplies([]);
 
     try {
       // Send messages to the chat API
@@ -132,9 +201,15 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
         }
       }
 
+      // After streaming completes, detect quick replies from the assistant content
+      const cleanedForDetection = stripGoalJson(assistantContent);
+      const detectedReplies = detectQuickReplies(cleanedForDetection);
+      setQuickReplies(detectedReplies);
+
       // Check if the response contains goal JSON
       const goals = parseGoalsFromResponse(assistantContent);
       if (goals.length > 0 && onGoalCreated) {
+        setIsScheduling(true);
         for (const goal of goals) {
           try {
             const saveResponse = await fetch("/api/goals", {
@@ -214,6 +289,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
             });
           }
         }
+        setIsScheduling(false);
       }
 
       // Clean the displayed message (remove JSON blocks)
@@ -277,13 +353,32 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
               <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
                 {item.message.content}
               </p>
+              {isScheduling && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 animate-pulse">
+                  Scheduling...
+                </p>
+              )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Input */}
+      {/* Quick reply pills + Input */}
       <div className="flex-none p-4 max-w-2xl mx-auto w-full">
+        {quickReplies.length > 0 && !isLoading && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {quickReplies.map((reply) => (
+              <button
+                key={reply}
+                type="button"
+                onClick={() => handleQuickReply(reply)}
+                className="px-4 py-1.5 text-sm rounded-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors cursor-pointer"
+              >
+                {reply}
+              </button>
+            ))}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex gap-3 items-end">
           <textarea
             ref={inputRef}

@@ -40,7 +40,7 @@ export default async function GoalDetailPage({
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col">
+    <div className="h-screen bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* Top bar */}
       <header className="border-b border-gray-100 dark:border-gray-800 px-6 py-3">
         <div className="flex items-center justify-between max-w-7xl mx-auto">

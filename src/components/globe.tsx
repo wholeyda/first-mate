@@ -14,7 +14,7 @@
 
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { Island } from "@/types/database";
 
 interface GlobeProps {
@@ -136,6 +136,11 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
   const islandsRef = useRef<Island[]>(islands);
   const planetPointsRef = useRef<Map<string, Point3D[]>>(new Map());
   const projectedPlanetCentersRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const scaleRef = useRef<number>(1.0);
+  const [zoomPercent, setZoomPercent] = useState<number>(100);
+
+  // Pinch-to-zoom tracking refs
+  const lastPinchDistRef = useRef<number | null>(null);
 
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -154,6 +159,70 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
     }
     planetPointsRef.current = newMap;
   }, [islands]);
+
+  // Wheel zoom handler
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY * -0.001;
+      scaleRef.current = Math.min(3.0, Math.max(0.5, scaleRef.current + delta));
+      setZoomPercent(Math.round(scaleRef.current * 100));
+    };
+
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
+  // Pinch-to-zoom touch handlers
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function getPinchDistance(touches: TouchList): number {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        lastPinchDistRef.current = getPinchDistance(e.touches);
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
+        e.preventDefault();
+        const currentDist = getPinchDistance(e.touches);
+        const delta = (currentDist - lastPinchDistRef.current) * 0.005;
+        scaleRef.current = Math.min(3.0, Math.max(0.5, scaleRef.current + delta));
+        setZoomPercent(Math.round(scaleRef.current * 100));
+        lastPinchDistRef.current = currentDist;
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        lastPinchDistRef.current = null;
+      }
+    };
+
+    canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+    canvas.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      canvas.removeEventListener("touchmove", handleTouchMove);
+      canvas.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, []);
 
   // Handle clicks on planets
   const handleClick = useCallback(
@@ -174,7 +243,7 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
           const dist = Math.sqrt(
             (clickX - center.x) ** 2 + (clickY - center.y) ** 2
           );
-          if (dist < 50) {
+          if (dist < 50 * scaleRef.current) {
             onIslandClick(island);
             return;
           }
@@ -195,6 +264,8 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
 
     function animate(timestamp: number) {
       if (!ctx) return;
+
+      const zoom = scaleRef.current;
 
       const targetSpeed = isActiveRef.current ? ACTIVE_SPEED : IDLE_SPEED;
       currentSpeedRef.current +=
@@ -219,6 +290,11 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
       const cosT = Math.cos(tiltAngle);
       const sinT = Math.sin(tiltAngle);
 
+      // Scaled radii based on zoom
+      const scaledSphereRadius = SPHERE_RADIUS * zoom;
+      const scaledPlanetOrbitDistance = PLANET_ORBIT_DISTANCE;
+      const scaledPlanetRadius = PLANET_RADIUS * zoom;
+
       // Helper: transform and project a 3D point
       function project(p: Point3D) {
         const rx = p.x * cosA - p.z * sinA;
@@ -230,9 +306,9 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
         ry = ry2;
         const finalZ = rz2;
 
-        const scale = FOCAL_LENGTH / (FOCAL_LENGTH + finalZ * SPHERE_RADIUS);
-        const screenX = CSS_SIZE / 2 + rx * SPHERE_RADIUS * scale;
-        const screenY = CSS_SIZE / 2 + ry * SPHERE_RADIUS * scale;
+        const scale = FOCAL_LENGTH / (FOCAL_LENGTH + finalZ * scaledSphereRadius);
+        const screenX = CSS_SIZE / 2 + rx * scaledSphereRadius * scale;
+        const screenY = CSS_SIZE / 2 + ry * scaledSphereRadius * scale;
 
         const depthNorm = (finalZ + 1) / 2;
         return { screenX, screenY, depth: finalZ, depthNorm, scale, originalY: p.y };
@@ -276,14 +352,14 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
       // --- Draw orbit paths ---
       for (const island of islandsRef.current) {
         const orbitPhi = island.position_phi;
-        const orbitDist = PLANET_ORBIT_DISTANCE;
+        const orbitDist = scaledPlanetOrbitDistance;
 
         // Draw orbit ellipse
         ctx.save();
         ctx.translate(CSS_SIZE / 2, CSS_SIZE / 2);
 
         // The orbit is a circle in 3D, projected as an ellipse
-        const orbitRadius = orbitDist * SPHERE_RADIUS * (FOCAL_LENGTH / (FOCAL_LENGTH));
+        const orbitRadius = orbitDist * scaledSphereRadius * (FOCAL_LENGTH / (FOCAL_LENGTH));
         const tiltedRadius = orbitRadius * Math.abs(Math.sin(orbitPhi));
 
         ctx.beginPath();
@@ -310,9 +386,9 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
         const orbitPhi = island.position_phi;
 
         // Convert to 3D position on orbit sphere
-        const orbitX = Math.sin(orbitPhi) * Math.cos(orbitTheta) * PLANET_ORBIT_DISTANCE;
-        const orbitY = Math.cos(orbitPhi) * PLANET_ORBIT_DISTANCE;
-        const orbitZ = Math.sin(orbitPhi) * Math.sin(orbitTheta) * PLANET_ORBIT_DISTANCE;
+        const orbitX = Math.sin(orbitPhi) * Math.cos(orbitTheta) * scaledPlanetOrbitDistance;
+        const orbitY = Math.cos(orbitPhi) * scaledPlanetOrbitDistance;
+        const orbitZ = Math.sin(orbitPhi) * Math.sin(orbitTheta) * scaledPlanetOrbitDistance;
 
         // Project the orbit center
         const centerProj = project({ x: orbitX, y: orbitY, z: orbitZ });
@@ -325,7 +401,7 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
 
         // Scale the planet based on depth (closer = bigger)
         const planetScale = centerProj.scale * 0.9;
-        const scaledRadius = PLANET_RADIUS * planetScale;
+        const scaledRadius = scaledPlanetRadius * planetScale;
 
         // Planet's own spin angle
         const planetAngle = timestamp * PLANET_SPIN_SPEED + island.position_theta * 10;
@@ -464,14 +540,24 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
 
   return (
     <div className="flex justify-center items-center">
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_SIZE}
-        height={CANVAS_SIZE}
-        className="w-[900px] h-[900px]"
-        onClick={handleClick}
-        style={{ cursor: onIslandClick && islands.length > 0 ? "pointer" : "default" }}
-      />
+      <div className="relative">
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_SIZE}
+          height={CANVAS_SIZE}
+          className="w-[900px] h-[900px]"
+          onClick={handleClick}
+          style={{
+            cursor: onIslandClick && islands.length > 0 ? "pointer" : "default",
+            touchAction: "none",
+          }}
+        />
+        {zoomPercent !== 100 && (
+          <span className="text-[10px] text-gray-400 dark:text-gray-600 absolute bottom-1 right-2 pointer-events-none">
+            {zoomPercent}%
+          </span>
+        )}
+      </div>
     </div>
   );
 }

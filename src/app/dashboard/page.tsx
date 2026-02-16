@@ -32,6 +32,13 @@ export default async function DashboardPage() {
     .eq("status", "active")
     .order("priority", { ascending: false });
 
+  // Fetch completed goals count for the avatar
+  const { count: completedCount } = await supabase
+    .from("goals")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("status", "completed");
+
   // Fetch all sub_goals for active goals to display as items
   const goalIds = (goals || []).map((g) => g.id);
   let subGoals: Array<Record<string, unknown>> = [];
@@ -46,7 +53,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col">
+    <div className="h-screen bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* Top bar */}
       <header className="border-b border-gray-100 dark:border-gray-800 px-6 py-3">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -60,7 +67,11 @@ export default async function DashboardPage() {
       </header>
 
       {/* Main content */}
-      <DashboardClient initialGoals={goals || []} initialSubGoals={subGoals} />
+      <DashboardClient
+        initialGoals={goals || []}
+        initialSubGoals={subGoals}
+        completedGoalCount={completedCount || 0}
+      />
     </div>
   );
 }
