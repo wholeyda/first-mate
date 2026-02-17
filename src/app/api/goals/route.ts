@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getBusySlots, TokenRefreshCallback } from "@/lib/google-calendar";
+import { getBusySlots, createEvent, TokenRefreshCallback } from "@/lib/google-calendar";
 import { findNextSlot, findRecurringSlots } from "@/lib/scheduler";
 import { Goal } from "@/types/database";
 
@@ -184,6 +184,7 @@ export async function POST(request: NextRequest) {
       start_time: string;
       end_time: string;
       calendar_type: string;
+      google_event_id?: string | null;
     }> = [];
     let schedulingError: string | undefined;
 
@@ -231,20 +232,44 @@ export async function POST(request: NextRequest) {
         if (foundBlocks.length === 0) {
           schedulingError = "No available time slot found — the goal was saved but not scheduled";
         } else {
-          // Save as PENDING blocks (no Google Calendar event yet — user must approve)
+          // Auto-create Google Calendar events and save as approved blocks
           for (const block of foundBlocks) {
             try {
+              // Create Google Calendar event immediately
+              const calendarId =
+                block.calendar_type === "work"
+                  ? workId
+                  : personalId;
+
+              let googleEventId: string | null = null;
+              try {
+                const event = await createEvent(
+                  profile.google_access_token,
+                  profile.google_refresh_token,
+                  calendarId,
+                  savedGoal.title,
+                  savedGoal.description || "Scheduled by First Mate",
+                  block.start_time,
+                  block.end_time,
+                  onTokenRefresh
+                );
+                googleEventId = event.id || null;
+              } catch (calErr) {
+                console.error("Google Calendar event creation failed:", calErr);
+              }
+
+              // Save block as approved (with Google event ID if created)
               const { data: savedBlock, error: blockError } = await supabase
                 .from("scheduled_blocks")
                 .insert({
                   user_id: user.id,
                   goal_id: savedGoal.id,
-                  google_event_id: null,
+                  google_event_id: googleEventId,
                   calendar_type: block.calendar_type,
                   start_time: block.start_time,
                   end_time: block.end_time,
                   is_completed: false,
-                  status: "pending",
+                  status: googleEventId ? "approved" : "pending",
                 })
                 .select("id")
                 .single();
@@ -255,6 +280,7 @@ export async function POST(request: NextRequest) {
                   start_time: block.start_time,
                   end_time: block.end_time,
                   calendar_type: block.calendar_type,
+                  google_event_id: googleEventId,
                 });
               } else {
                 console.error("Block save error:", blockError);

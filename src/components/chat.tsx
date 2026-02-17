@@ -252,15 +252,20 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                   day: "numeric",
                   hour: "numeric",
                   minute: "2-digit",
+                  timeZone: "America/Los_Angeles",
                 });
                 const count = savedData.proposedBlocks.length;
                 const suffix = count > 1 ? ` (and ${count - 1} more)` : "";
+                const hasGoogleEvent = block.google_event_id;
+                const statusMsg = hasGoogleEvent
+                  ? `Added to your ${block.calendar_type} calendar: ${timeStr} PST${suffix}`
+                  : `Proposed for your ${block.calendar_type} calendar: ${timeStr} PST${suffix} — check Calendar tab to approve`;
                 setMessages((prev) => {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     role: "assistant",
                     content: updated[updated.length - 1].content +
-                      `\n\nProposed for your ${block.calendar_type} calendar: ${timeStr}${suffix} — check Calendar tab to approve`,
+                      `\n\n${statusMsg}`,
                   };
                   return updated;
                 });

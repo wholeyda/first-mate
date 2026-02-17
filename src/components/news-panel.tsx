@@ -1,8 +1,9 @@
 /**
- * News Panel
+ * Tips & Resources Panel
  *
- * Displays curated news items relevant to the user's active goals.
- * Fetches from /api/news which uses Claude to generate goal-relevant news.
+ * Displays AI-curated tips and resources relevant to the user's active goals.
+ * Fetches from /api/news which uses Claude to generate goal-relevant tips.
+ * Links always go to real Google search results.
  * Supports dismiss (x) per item and refresh (↻) to load new ones.
  */
 
@@ -19,18 +20,6 @@ interface NewsItem {
   publishedAt: string;
 }
 
-function timeAgo(dateString: string): string {
-  const now = new Date();
-  const date = new Date(dateString);
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
-}
-
 export function NewsPanel() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,7 +33,7 @@ export function NewsPanel() {
         setNews(data.news || []);
       }
     } catch (error) {
-      console.error("Failed to fetch news:", error);
+      console.error("Failed to fetch tips:", error);
     } finally {
       setIsLoading(false);
     }
@@ -66,7 +55,7 @@ export function NewsPanel() {
     return (
       <div className="px-4 pb-4">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-          News
+          Tips & Resources
         </h3>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
@@ -89,8 +78,8 @@ export function NewsPanel() {
   if (news.length === 0 && !isLoading) {
     return (
       <div className="px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">News</h3>
-        <p className="text-xs text-gray-400 dark:text-gray-500">No news available yet.</p>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">Tips & Resources</h3>
+        <p className="text-xs text-gray-400 dark:text-gray-500">No tips available yet.</p>
       </div>
     );
   }
@@ -99,13 +88,13 @@ export function NewsPanel() {
     <div className="px-4 pb-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-          News
+          Tips & Resources
         </h3>
         <button
           onClick={handleRefresh}
           disabled={isLoading}
           className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer text-xs"
-          title="Refresh news"
+          title="Refresh tips"
         >
           ↻
         </button>
@@ -139,7 +128,7 @@ export function NewsPanel() {
                   {item.summary}
                 </p>
                 <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
-                  {item.source} · {timeAgo(item.publishedAt)} · {item.relevantGoal}
+                  {item.relevantGoal}
                 </p>
               </div>
             </a>

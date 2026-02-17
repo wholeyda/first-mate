@@ -87,10 +87,11 @@ export function GoalDetailClient({ goal }: GoalDetailClientProps) {
     fetchSubGoals();
   }, [fetchSubGoals]);
 
-  // AI decomposition
+  // AI decomposition — minimum 1s display to prevent flicker
   async function handleDecompose() {
     setIsDecomposing(true);
     setError(null);
+    const startTime = Date.now();
     try {
       const response = await fetch(`/api/goals/${goal.id}/decompose`, {
         method: "POST",
@@ -135,6 +136,11 @@ export function GoalDetailClient({ goal }: GoalDetailClientProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to decompose goal. Please try again.");
     } finally {
+      // Ensure spinner shows for at least 1s to prevent flicker
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 1000) {
+        await new Promise((r) => setTimeout(r, 1000 - elapsed));
+      }
       setIsDecomposing(false);
     }
   }
@@ -144,37 +150,55 @@ export function GoalDetailClient({ goal }: GoalDetailClientProps) {
     setIsSaving(true);
     setError(null);
     try {
-      // If existing sub-goals, delete them first
-      const existingIds = subGoals.filter((sg) => sg.id).map((sg) => sg.id);
-      for (const sgId of existingIds) {
-        await fetch(`/api/goals/${goal.id}/sub-goals/${sgId}`, {
-          method: "DELETE",
-        });
-      }
+      // Separate existing (have id) from new (no id) sub-goals
+      const existingSgs = subGoals.filter((sg) => sg.id);
+      const newSgs = subGoals.filter((sg) => !sg.id);
 
-      // Save new sub-goals
-      const response = await fetch(`/api/goals/${goal.id}/sub-goals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subGoals: subGoals.map((sg) => ({
+      // Update existing sub-goals via PATCH
+      for (const sg of existingSgs) {
+        await fetch(`/api/goals/${goal.id}/sub-goals/${sg.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             title: sg.title,
             description: sg.description,
             estimated_hours: sg.estimated_hours,
             start_date: sg.start_date,
             end_date: sg.end_date,
+            status: sg.status,
             sort_order: sg.sort_order,
-            depends_on: sg.depends_on_indices,
-          })),
-        }),
-      });
+            depends_on: [],
+          }),
+        });
+      }
 
-      if (!response.ok) throw new Error("Save failed");
+      // Insert new sub-goals via POST
+      if (newSgs.length > 0) {
+        const response = await fetch(`/api/goals/${goal.id}/sub-goals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subGoals: newSgs.map((sg) => ({
+              title: sg.title,
+              description: sg.description,
+              estimated_hours: sg.estimated_hours,
+              start_date: sg.start_date,
+              end_date: sg.end_date,
+              sort_order: sg.sort_order,
+              depends_on: [],
+            })),
+          }),
+        });
 
-      const data = await response.json();
-      if (data.subGoals) {
-        setSubGoals(
-          data.subGoals.map((sg: SubGoal) => ({
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || "Save failed");
+        }
+
+        const data = await response.json();
+        if (data.subGoals) {
+          // Merge: keep updated existing + add newly saved
+          const newlySaved = data.subGoals.map((sg: SubGoal) => ({
             id: sg.id,
             title: sg.title,
             description: sg.description,
@@ -184,13 +208,14 @@ export function GoalDetailClient({ goal }: GoalDetailClientProps) {
             status: sg.status,
             sort_order: sg.sort_order,
             depends_on_indices: sg.depends_on || [],
-          }))
-        );
+          }));
+          setSubGoals([...existingSgs, ...newlySaved]);
+        }
       }
 
       setHasUnsavedChanges(false);
-    } catch {
-      setError("Failed to save sub-goals.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save sub-goals.");
     } finally {
       setIsSaving(false);
     }

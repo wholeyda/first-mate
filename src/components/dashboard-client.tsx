@@ -40,6 +40,8 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const [completingGoal, setCompletingGoal] = useState<Goal | null>(null);
   const [revealIsland, setRevealIsland] = useState<{ island: Island; goalTitle: string } | null>(null);
   const [avatarExpanded, setAvatarExpanded] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Avatar state
   const [avatarData, setAvatarData] = useState<{ description: string; traits: string[] }>({
@@ -190,6 +192,19 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
     setAvatarData({ description: "Just getting started! Complete some goals to reveal your character.", traits: [] });
   }
 
+  async function handleResetAllData() {
+    setIsResetting(true);
+    try {
+      await fetch("/api/clear-history", { method: "DELETE" });
+      handleHistoryCleared();
+      setShowResetConfirm(false);
+    } catch {
+      // Reset failed
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
   const activeGoals = goals.filter((g) => g.status === "active");
 
   return (
@@ -210,22 +225,31 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
-        <div className="flex items-center gap-1 px-4 pt-2 border-b border-gray-100 dark:border-gray-800">
-          {(["chat", "calendar", "resume"] as Tab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === tab
-                  ? "text-gray-900 dark:text-gray-100 border-b-2 border-gray-900 dark:border-gray-100"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-              }`}
-            >
-              {tab === "chat" && "Chat"}
-              {tab === "calendar" && "Calendar"}
-              {tab === "resume" && "Resume"}
-            </button>
-          ))}
+        <div className="flex items-center justify-between px-4 pt-2 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-1">
+            {(["chat", "calendar", "resume"] as Tab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === tab
+                    ? "text-gray-900 dark:text-gray-100 border-b-2 border-gray-900 dark:border-gray-100"
+                    : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                }`}
+              >
+                {tab === "chat" && "Chat"}
+                {tab === "calendar" && "Calendar"}
+                {tab === "resume" && "Resume"}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer px-2 py-1"
+            title="Reset all First Mate data"
+          >
+            Reset All
+          </button>
         </div>
 
         {/* Tab content */}
@@ -265,6 +289,36 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
           isOpen={true}
           onClose={() => setRevealIsland(null)}
         />
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 dark:bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm mx-4 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              Reset All Data?
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              This will permanently delete all your goals, sub-goals, scheduled events, islands, and avatar progress. This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                disabled={isResetting}
+                className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetAllData}
+                disabled={isResetting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-500 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {isResetting ? "Resetting..." : "Reset Everything"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
