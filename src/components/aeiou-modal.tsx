@@ -26,47 +26,108 @@ interface AeiouModalProps {
 
 type Step = "greeting" | "A" | "E" | "I" | "O" | "U" | "excitement" | "peak_moments" | "evaluating" | "success" | "failure";
 
-const STEPS: { key: Step; letter: string; question: string; hint?: string }[] = [
-  {
+function generateQuestions(goal: Goal, previousAnswers: Record<string, string>): { key: Step; letter: string; question: string; hint?: string }[] {
+  const goalTitle = goal.title;
+
+  const questions: { key: Step; letter: string; question: string; hint?: string }[] = [];
+
+  // A - Activities (always specific to the goal)
+  questions.push({
     key: "A",
     letter: "A",
-    question: "What were you actually doing? Describe the specific activities you engaged in.",
-    hint: "Be as specific as possible — what tasks, actions, or behaviors were you performing?",
-  },
-  {
+    question: `What specific activities did you do to complete "${goalTitle}"? Walk me through the key actions step by step.`,
+    hint: `Think about the actual tasks — not just "coding" but what specifically you built, designed, or solved.`,
+  });
+
+  // E - Environments (context-aware)
+  questions.push({
     key: "E",
     letter: "E",
-    question: "Where were you during this activity? What kind of place was it and how did it make you feel?",
-    hint: "Think about the physical space, atmosphere, noise level, lighting...",
-  },
-  {
-    key: "I",
-    letter: "I",
-    question: "What were you interacting with \u2014 people or machines? New interaction or a familiar one? Formal or informal?",
-  },
-  {
-    key: "O",
-    letter: "O",
-    question: "Were there any specific objects, tools, or devices you interacted with?",
-  },
-  {
-    key: "U",
-    letter: "U",
-    question: "Who else was there? What role did they play in making it a positive or negative experience?",
-  },
-  {
+    question: previousAnswers.activities
+      ? `You mentioned: "${previousAnswers.activities.slice(0, 80)}..." — where were you doing this? What was the setting like?`
+      : `Where did you work on "${goalTitle}"? Describe the environment, atmosphere, and vibe.`,
+    hint: "Physical space, noise, lighting, temperature — what made you comfortable or uncomfortable?",
+  });
+
+  // I - Interactions (skip people question if answer suggests solo work)
+  const activitiesLower = (previousAnswers.activities || "").toLowerCase();
+  const envLower = (previousAnswers.environments || "").toLowerCase();
+  const seemsSolo = activitiesLower.includes("alone") || activitiesLower.includes("by myself") ||
+    activitiesLower.includes("solo") || envLower.includes("alone") || envLower.includes("home office");
+
+  if (seemsSolo) {
+    questions.push({
+      key: "I",
+      letter: "I",
+      question: `It sounds like you worked independently on this. What tools, software, or resources did you interact with most? Were there any async interactions (Slack, email, forums)?`,
+      hint: "Even solo work involves interactions — with tools, documentation, online communities, or brief check-ins.",
+    });
+  } else {
+    questions.push({
+      key: "I",
+      letter: "I",
+      question: `Who did you interact with while working on "${goalTitle}"? Were these interactions energizing or draining?`,
+      hint: "Think about collaborations, meetings, pair work, feedback sessions — which ones fueled you?",
+    });
+  }
+
+  // O - Objects/Tools (context-aware based on previous answers)
+  const mentionedComputer = activitiesLower.includes("computer") || activitiesLower.includes("laptop") ||
+    activitiesLower.includes("screen") || activitiesLower.includes("coding") || activitiesLower.includes("code");
+
+  if (mentionedComputer) {
+    questions.push({
+      key: "O",
+      letter: "O",
+      question: `Beyond your computer, were there specific tools, frameworks, or resources that made a real difference in completing "${goalTitle}"?`,
+      hint: "Specific software, methodologies, reference materials, AI tools, physical tools — what was indispensable?",
+    });
+  } else {
+    questions.push({
+      key: "O",
+      letter: "O",
+      question: `What tools, objects, or devices were central to completing "${goalTitle}"?`,
+      hint: "Physical tools, digital tools, reference materials — anything you couldn't have done it without.",
+    });
+  }
+
+  // U - Users/People (skip or rephrase if solo)
+  if (seemsSolo) {
+    questions.push({
+      key: "U",
+      letter: "U",
+      question: `Even working solo, other people can influence your experience. Did anyone inspire, support, or challenge you during "${goalTitle}" — even indirectly?`,
+      hint: "Mentors, online communities, friends you bounced ideas off, even people whose work inspired you.",
+    });
+  } else {
+    questions.push({
+      key: "U",
+      letter: "U",
+      question: `Of the people involved in "${goalTitle}", who had the biggest impact on your experience — positive or negative? Why?`,
+    });
+  }
+
+  // Excitement (always specific)
+  questions.push({
     key: "excitement",
     letter: "!",
-    question: "Did you feel excited and engaged while working on this? Rate your energy and focus — were you in flow, or was it a grind?",
-    hint: "Be honest. There's no wrong answer. Understanding your energy patterns helps us find the best work for you.",
-  },
-  {
+    question: `On a scale from "total grind" to "pure flow state" — where did "${goalTitle}" land for you? What drove that feeling?`,
+    hint: "Be specific about what moments felt effortless vs. what moments felt like pulling teeth.",
+  });
+
+  // Peak moments (builds on all previous)
+  const previousSummary = Object.values(previousAnswers).filter(Boolean).join(" ").slice(0, 150);
+  questions.push({
     key: "peak_moments",
-    letter: "\u2605",
-    question: "What specific actions or situations made you feel most alive, curious, or engaged? And which moments drained you?",
-    hint: "The more specific you are, the better First Mate can guide your career. \"Debugging the API\" is better than \"coding.\"",
-  },
-];
+    letter: "★",
+    question: previousSummary.length > 50
+      ? `Based on everything you've shared, what was THE single most energizing moment? And what was the biggest energy drain?`
+      : `What specific moment during "${goalTitle}" made you feel most alive? And what moment drained you most?`,
+    hint: "The more specific, the better First Mate can match you to work that keeps you in flow.",
+  });
+
+  return questions;
+}
 
 export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps) {
   const [step, setStep] = useState<Step>("greeting");
@@ -85,8 +146,9 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
 
   if (!isOpen) return null;
 
-  const stepIndex = STEPS.findIndex((s) => s.key === step);
-  const currentStep = STEPS[stepIndex];
+  const steps = generateQuestions(goal, answers);
+  const stepIndex = steps.findIndex((s) => s.key === step);
+  const currentStep = steps[stepIndex];
 
   function handleNext() {
     if (!currentAnswer.trim()) return;
@@ -110,13 +172,16 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
     setCurrentAnswer("");
 
     // Advance to next step
-    if (stepIndex < STEPS.length - 1) {
-      setStep(STEPS[stepIndex + 1].key);
+    const field = answerMap[currentStep.key];
+    const updatedAnswers = { ...answers, [field]: currentAnswer.trim() };
+    const updatedSteps = generateQuestions(goal, updatedAnswers);
+    if (stepIndex < updatedSteps.length - 1) {
+      setStep(updatedSteps[stepIndex + 1].key);
     } else {
       // All questions answered — submit
       handleSubmit({
         ...answers,
-        [answerMap[currentStep.key]]: currentAnswer.trim(),
+        [field]: currentAnswer.trim(),
       });
     }
   }
@@ -188,8 +253,8 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
               Completing: {goal.title}
             </h2>
             <p className="text-gray-400 text-sm mb-8">
-              Let&apos;s reflect on this accomplishment together.
-              I&apos;ll ask you 7 quick questions about your experience — the more specific you are, the better I can help you find your ideal work.
+              Let&apos;s reflect on completing <strong className="text-white">{goal.title}</strong>.
+              I&apos;ll ask you a few questions tailored to your experience — your honest answers help me understand what kind of work energizes you.
             </p>
             <button
               onClick={() => setStep("A")}
@@ -208,7 +273,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
                 {currentStep.letter}
               </span>
               <div className="flex gap-1">
-                {STEPS.map((s, i) => (
+                {steps.map((s, i) => (
                   <div
                     key={s.key}
                     className={`w-6 h-1 rounded-full transition-colors ${
@@ -247,7 +312,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
                 disabled={!currentAnswer.trim()}
                 className="bg-white text-gray-900 px-6 py-2 rounded-lg font-medium hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer text-sm"
               >
-                {stepIndex === STEPS.length - 1 ? "Submit" : "Next"}
+                {stepIndex === steps.length - 1 ? "Submit" : "Next"}
               </button>
             </div>
           </div>

@@ -39,6 +39,7 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const [islands, setIslands] = useState<Island[]>([]);
   const [completingGoal, setCompletingGoal] = useState<Goal | null>(null);
   const [revealIsland, setRevealIsland] = useState<{ island: Island; goalTitle: string } | null>(null);
+  const [avatarExpanded, setAvatarExpanded] = useState(false);
 
   // Avatar state
   const [avatarData, setAvatarData] = useState<{ description: string; traits: string[] }>({
@@ -181,12 +182,23 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
     setIslands((prev) => prev.filter((i) => i.id !== islandId));
   }
 
+  function handleHistoryCleared() {
+    setGoals([]);
+    setSubGoals([]);
+    setIslands([]);
+    setLocalCompletedCount(0);
+    setAvatarData({ description: "Just getting started! Complete some goals to reveal your character.", traits: [] });
+  }
+
   const activeGoals = goals.filter((g) => g.status === "active");
 
   return (
     <div className="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
       {/* Avatar panel - left side */}
-      <div className="w-48 border-r border-gray-100 dark:border-gray-800 overflow-y-auto bg-white dark:bg-gray-950 hidden lg:block">
+      <div className={`${avatarExpanded ? 'w-80' : 'w-48'} border-r border-gray-100 dark:border-gray-800 overflow-y-auto bg-white dark:bg-gray-950 hidden lg:block transition-all duration-300 relative`}>
+        <button onClick={() => setAvatarExpanded(!avatarExpanded)} className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-xs cursor-pointer z-10 bg-gray-100 dark:bg-gray-800 rounded-full">
+          {avatarExpanded ? '\u00AB' : '\u00BB'}
+        </button>
         <AvatarPanel
           completedGoalCount={localCompletedCount}
           traits={avatarData.traits}
@@ -219,7 +231,7 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         {/* Tab content */}
         <div className="flex-1 overflow-hidden">
           {activeTab === "chat" && (
-            <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} />
+            <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} onHistoryCleared={handleHistoryCleared} />
           )}
           {activeTab === "calendar" && <CalendarView />}
           {activeTab === "resume" && <ResumePanel />}

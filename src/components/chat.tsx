@@ -31,6 +31,7 @@ interface ChatProps {
   onGoalCreated?: (goal: ParsedGoal, savedGoal?: Record<string, unknown>, scheduledBlocks?: ScheduledBlock[]) => void;
   islands?: Island[];
   onIslandRemoved?: (islandId: string) => void;
+  onHistoryCleared?: () => void;
 }
 
 /**
@@ -87,14 +88,23 @@ function detectQuickReplies(text: string): string[] {
   return [];
 }
 
-export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
+export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [removingPlanet, setRemovingPlanet] = useState<Island | null>(null);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change or loading state changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isLoading]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -325,10 +335,26 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
     }
   }
 
+  async function handleClear() {
+    if (!showClearConfirm) {
+      setShowClearConfirm(true);
+      return;
+    }
+    try {
+      await fetch("/api/clear-history", { method: "DELETE" });
+    } catch {
+      // Silent fail
+    }
+    setMessages([]);
+    setQuickReplies([]);
+    setShowClearConfirm(false);
+    onHistoryCleared?.();
+  }
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-950 overflow-hidden">
       {/* Scrollable content area: globe + messages */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
         {/* Globe */}
         <div className="flex-none pt-6">
           <Globe
@@ -383,6 +409,16 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved }: ChatProps) {
           </div>
         )}
         <form onSubmit={handleSubmit} className="flex gap-3 items-end">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClear}
+              onBlur={() => setShowClearConfirm(false)}
+              className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors cursor-pointer whitespace-nowrap self-center"
+            >
+              {showClearConfirm ? "Clear all?" : "×"}
+            </button>
+          )}
           <textarea
             ref={inputRef}
             value={input}
