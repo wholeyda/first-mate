@@ -1,13 +1,15 @@
 /**
  * Gantt Chart
  *
- * SVG-based Gantt chart for visualizing sub-goal timelines.
- * Shows bars per sub-goal, dependency arrows, and a today marker.
+ * Interactive SVG-based Gantt chart for visualizing sub-goal timelines.
+ * Shows bars per sub-goal, dependency arrows, a today marker.
+ * Supports drag-to-resize and drag-to-move bars when editable.
+ * Dark mode support via CSS classes.
  */
 
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 
 interface SubGoalItem {
   id?: string;
@@ -25,15 +27,18 @@ interface GanttChartProps {
   parentDueDate: string;
   onSubGoalClick?: (index: number) => void;
   selectedIndex?: number;
+  onDateChange?: (index: number, newStart: string, newEnd: string) => void;
+  editable?: boolean;
 }
 
 // Layout constants
-const ROW_HEIGHT = 36;
-const LABEL_WIDTH = 140;
-const TOP_HEADER = 32;
+const ROW_HEIGHT = 40;
+const LABEL_WIDTH = 150;
+const TOP_HEADER = 36;
 const PADDING_RIGHT = 20;
-const BAR_HEIGHT = 20;
+const BAR_HEIGHT = 24;
 const BAR_Y_OFFSET = (ROW_HEIGHT - BAR_HEIGHT) / 2;
+const HANDLE_WIDTH = 6;
 
 function parseDate(d: string): Date {
   return new Date(d + "T00:00:00");
@@ -47,10 +52,17 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "#d1d5db",
-  in_progress: "#60a5fa",
-  completed: "#34d399",
+function formatDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const STATUS_COLORS: Record<string, { fill: string; stroke: string }> = {
+  pending: { fill: "#94a3b8", stroke: "#64748b" },
+  in_progress: { fill: "#60a5fa", stroke: "#3b82f6" },
+  completed: { fill: "#34d399", stroke: "#10b981" },
 };
 
 export function GanttChart({
@@ -58,7 +70,19 @@ export function GanttChart({
   parentDueDate,
   onSubGoalClick,
   selectedIndex,
+  onDateChange,
+  editable = false,
 }: GanttChartProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [dragging, setDragging] = useState<{
+    idx: number;
+    type: "move" | "resize-start" | "resize-end";
+    startX: number;
+    origStart: Date;
+    origEnd: Date;
+  } | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   const { chartWidth, totalDays, startDate, endDate, timeMarkers } =
     useMemo(() => {
       // Find the date range
@@ -88,7 +112,7 @@ export function GanttChart({
       const totalDays = Math.max(daysBetween(startDate, endDate), 7);
       const chartWidth = Math.max(totalDays * 30, 400);
 
-      // Generate time markers (every ~7 days or based on total)
+      // Generate time markers
       const markerInterval = totalDays <= 14 ? 1 : totalDays <= 60 ? 7 : 14;
       const timeMarkers: { x: number; label: string }[] = [];
       for (let i = 0; i <= totalDays; i += markerInterval) {
@@ -112,13 +136,101 @@ export function GanttChart({
   const todayDays = daysBetween(startDate, today);
   const todayX = LABEL_WIDTH + (todayDays / totalDays) * chartWidth;
 
+  // Convert pixel X to date
+  const xToDate = useCallback(
+    (x: number): Date => {
+      const dayOffset = ((x - LABEL_WIDTH) / chartWidth) * totalDays;
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + Math.round(dayOffset));
+      return date;
+    },
+    [chartWidth, totalDays, startDate]
+  );
+
+  // Drag handlers
+  const handleMouseDown = useCallback(
+    (
+      e: React.MouseEvent,
+      idx: number,
+      type: "move" | "resize-start" | "resize-end"
+    ) => {
+      if (!editable || !onDateChange) return;
+      e.stopPropagation();
+      e.preventDefault();
+
+      const sg = subGoals[idx];
+      const origStart = sg.start_date ? parseDate(sg.start_date) : startDate;
+      const origEnd = sg.end_date ? parseDate(sg.end_date) : endDate;
+
+      setDragging({
+        idx,
+        type,
+        startX: e.clientX,
+        origStart,
+        origEnd,
+      });
+    },
+    [editable, onDateChange, subGoals, startDate, endDate]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!dragging || !onDateChange) return;
+
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const svgScale = svgWidth / rect.width;
+      const deltaX = (e.clientX - dragging.startX) * svgScale;
+      const deltaDays = Math.round((deltaX / chartWidth) * totalDays);
+
+      if (deltaDays === 0) return;
+
+      const { idx, type, origStart, origEnd } = dragging;
+
+      let newStart = new Date(origStart);
+      let newEnd = new Date(origEnd);
+
+      if (type === "move") {
+        newStart.setDate(newStart.getDate() + deltaDays);
+        newEnd.setDate(newEnd.getDate() + deltaDays);
+      } else if (type === "resize-start") {
+        newStart.setDate(newStart.getDate() + deltaDays);
+        if (newStart >= newEnd) {
+          newStart = new Date(newEnd);
+          newStart.setDate(newStart.getDate() - 1);
+        }
+      } else if (type === "resize-end") {
+        newEnd.setDate(newEnd.getDate() + deltaDays);
+        if (newEnd <= newStart) {
+          newEnd = new Date(newStart);
+          newEnd.setDate(newEnd.getDate() + 1);
+        }
+      }
+
+      onDateChange(idx, formatDateISO(newStart), formatDateISO(newEnd));
+    },
+    [dragging, onDateChange, chartWidth, totalDays, svgWidth]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setDragging(null);
+  }, []);
+
+  // Determine dark mode from document
+  const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+
   return (
-    <div className="w-full overflow-x-auto border border-gray-100 rounded-xl bg-white">
+    <div className="w-full overflow-x-auto border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-950">
       <svg
+        ref={svgRef}
         width={svgWidth}
         height={svgHeight}
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="min-w-full"
+        className="min-w-full select-none"
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       >
         {/* Header background */}
         <rect
@@ -126,7 +238,7 @@ export function GanttChart({
           y="0"
           width={svgWidth}
           height={TOP_HEADER}
-          fill="#f9fafb"
+          className="fill-gray-50 dark:fill-gray-900"
         />
 
         {/* Time markers */}
@@ -137,14 +249,14 @@ export function GanttChart({
               y1={TOP_HEADER}
               x2={marker.x}
               y2={svgHeight}
-              stroke="#f3f4f6"
+              className="stroke-gray-100 dark:stroke-gray-800"
               strokeWidth="1"
             />
             <text
               x={marker.x}
-              y={22}
+              y={24}
               textAnchor="middle"
-              fill="#9ca3af"
+              className="fill-gray-400 dark:fill-gray-500"
               fontSize="9"
               fontFamily="system-ui, sans-serif"
             >
@@ -183,6 +295,8 @@ export function GanttChart({
         {subGoals.map((sg, idx) => {
           const y = TOP_HEADER + idx * ROW_HEIGHT;
           const isSelected = selectedIndex === idx;
+          const isHovered = hoverIdx === idx;
+          const isDraggingThis = dragging?.idx === idx;
 
           // Bar position
           const sgStart = sg.start_date
@@ -195,14 +309,18 @@ export function GanttChart({
             LABEL_WIDTH + (barStartDays / totalDays) * chartWidth;
           const barWidth = Math.max(
             ((barEndDays - barStartDays) / totalDays) * chartWidth,
-            8
+            12
           );
+
+          const colors = STATUS_COLORS[sg.status] || STATUS_COLORS.pending;
 
           return (
             <g
               key={idx}
               onClick={() => onSubGoalClick?.(idx)}
-              style={{ cursor: onSubGoalClick ? "pointer" : "default" }}
+              onMouseEnter={() => setHoverIdx(idx)}
+              onMouseLeave={() => setHoverIdx(null)}
+              style={{ cursor: editable ? "pointer" : "default" }}
             >
               {/* Row background */}
               <rect
@@ -210,15 +328,31 @@ export function GanttChart({
                 y={y}
                 width={svgWidth}
                 height={ROW_HEIGHT}
-                fill={isSelected ? "#f0f9ff" : idx % 2 === 0 ? "#fff" : "#fafafa"}
+                fill={
+                  isSelected
+                    ? isDark ? "rgba(59,130,246,0.1)" : "#f0f9ff"
+                    : isHovered
+                    ? isDark ? "rgba(255,255,255,0.02)" : "#fafafa"
+                    : isDark ? (idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)") : (idx % 2 === 0 ? "#fff" : "#fafafa")
+                }
+              />
+
+              {/* Row divider */}
+              <line
+                x1="0"
+                y1={y + ROW_HEIGHT}
+                x2={svgWidth}
+                y2={y + ROW_HEIGHT}
+                className="stroke-gray-50 dark:stroke-gray-800/50"
+                strokeWidth="0.5"
               />
 
               {/* Row label */}
               <text
-                x="8"
+                x="12"
                 y={y + ROW_HEIGHT / 2 + 4}
-                fill="#374151"
-                fontSize="10"
+                className="fill-gray-700 dark:fill-gray-300"
+                fontSize="11"
                 fontFamily="system-ui, sans-serif"
               >
                 {sg.title.length > 18
@@ -232,24 +366,72 @@ export function GanttChart({
                 y={y + BAR_Y_OFFSET}
                 width={barWidth}
                 height={BAR_HEIGHT}
-                rx="4"
-                fill={STATUS_COLORS[sg.status] || STATUS_COLORS.pending}
-                opacity={0.85}
+                rx="6"
+                fill={colors.fill}
+                stroke={isSelected || isDraggingThis ? colors.stroke : "transparent"}
+                strokeWidth={isSelected || isDraggingThis ? 2 : 0}
+                opacity={isDraggingThis ? 0.7 : 0.9}
+                style={{ cursor: editable ? "grab" : "pointer" }}
+                onMouseDown={(e) => handleMouseDown(e, idx, "move")}
               />
 
               {/* Hours label on bar */}
-              {barWidth > 30 && (
+              {barWidth > 40 && (
                 <text
                   x={barX + barWidth / 2}
-                  y={y + BAR_Y_OFFSET + BAR_HEIGHT / 2 + 3}
+                  y={y + BAR_Y_OFFSET + BAR_HEIGHT / 2 + 4}
                   textAnchor="middle"
                   fill="white"
-                  fontSize="8"
+                  fontSize="9"
                   fontFamily="system-ui, sans-serif"
                   fontWeight="600"
+                  style={{ pointerEvents: "none" }}
                 >
                   {sg.estimated_hours}h
                 </text>
+              )}
+
+              {/* Date range tooltip on hover */}
+              {barWidth <= 40 && isHovered && (
+                <text
+                  x={barX + barWidth + 4}
+                  y={y + BAR_Y_OFFSET + BAR_HEIGHT / 2 + 3}
+                  className="fill-gray-400 dark:fill-gray-500"
+                  fontSize="8"
+                  fontFamily="system-ui, sans-serif"
+                >
+                  {sg.estimated_hours}h
+                </text>
+              )}
+
+              {/* Resize handles (editable mode) */}
+              {editable && (isHovered || isDraggingThis) && (
+                <>
+                  {/* Left resize handle */}
+                  <rect
+                    x={barX - 1}
+                    y={y + BAR_Y_OFFSET}
+                    width={HANDLE_WIDTH}
+                    height={BAR_HEIGHT}
+                    rx="2"
+                    fill={colors.stroke}
+                    opacity={0.7}
+                    style={{ cursor: "ew-resize" }}
+                    onMouseDown={(e) => handleMouseDown(e, idx, "resize-start")}
+                  />
+                  {/* Right resize handle */}
+                  <rect
+                    x={barX + barWidth - HANDLE_WIDTH + 1}
+                    y={y + BAR_Y_OFFSET}
+                    width={HANDLE_WIDTH}
+                    height={BAR_HEIGHT}
+                    rx="2"
+                    fill={colors.stroke}
+                    opacity={0.7}
+                    style={{ cursor: "ew-resize" }}
+                    onMouseDown={(e) => handleMouseDown(e, idx, "resize-end")}
+                  />
+                </>
               )}
             </g>
           );
@@ -292,14 +474,14 @@ export function GanttChart({
                 <path
                   d={`M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`}
                   fill="none"
-                  stroke="#9ca3af"
+                  className="stroke-gray-300 dark:stroke-gray-600"
                   strokeWidth="1"
                   strokeDasharray="3 2"
                 />
                 {/* Arrowhead */}
                 <polygon
                   points={`${toX},${toY} ${toX - 5},${toY - 3} ${toX - 5},${toY + 3}`}
-                  fill="#9ca3af"
+                  className="fill-gray-300 dark:fill-gray-600"
                 />
               </g>
             );
@@ -312,7 +494,7 @@ export function GanttChart({
           y1="0"
           x2={LABEL_WIDTH}
           y2={svgHeight}
-          stroke="#e5e7eb"
+          className="stroke-gray-200 dark:stroke-gray-700"
           strokeWidth="1"
         />
       </svg>

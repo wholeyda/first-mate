@@ -161,8 +161,8 @@ export async function createEvent(
     requestBody: {
       summary,
       description,
-      start: { dateTime: startTime },
-      end: { dateTime: endTime },
+      start: { dateTime: startTime, timeZone: "America/Los_Angeles" },
+      end: { dateTime: endTime, timeZone: "America/Los_Angeles" },
       extendedProperties: {
         private: {
           [APP_TAG_KEY]: APP_TAG_VALUE,

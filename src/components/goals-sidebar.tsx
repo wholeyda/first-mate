@@ -1,12 +1,10 @@
 /**
  * Goals Sidebar
  *
- * Shows a list of active goals on the right side of the dashboard.
- * Each goal displays its title, priority, due date, and type (work/personal).
- * Goals can be deleted (archived) with the x button.
- * Goals can be completed via AEIOU flow with the checkmark button.
- * Sub-goals are shown as standalone indented cards below their parent goal.
- * Each sub-goal card has a status toggle (pending -> in_progress -> completed).
+ * Shows active goals, news, and recommendations on the right side of the dashboard.
+ * Order: Active Goals -> News -> Recommendations
+ * Each section shows max 3 items with its own mini scroller.
+ * Goals can be deleted, completed via AEIOU flow, and have expandable subtasks.
  */
 
 "use client";
@@ -67,7 +65,6 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
   }
 
   const fetchSubtasksForGoal = useCallback(async (goalId: string) => {
-    // Don't refetch if we already have data from props or previous fetch
     if (subGoalsByParent[goalId] || fetchedSubtasks[goalId]) return;
     setLoadingSubtasks((prev) => new Set(prev).add(goalId));
     try {
@@ -145,7 +142,6 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
     start_date?: string | null;
     end_date?: string | null;
   }> {
-    // Prefer pre-loaded from props, fall back to client-fetched
     const fromProps = subGoalsByParent[goalId];
     if (fromProps) {
       return fromProps.map((sg) => ({
@@ -171,43 +167,32 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
     return [];
   }
 
-  // Count total subtasks
   const totalSubtasks = Object.values(subGoalsByParent).reduce((sum, sgs) => sum + sgs.length, 0);
+  const sortedGoals = [...goals].sort((a, b) => b.priority - a.priority);
 
   return (
     <aside className="w-80 border-l border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
-      {/* Header - sticky */}
-      <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-800 flex-none">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active Goals</h2>
-        <p className="text-xs text-gray-400 mt-1">
-          {goals.length} {goals.length === 1 ? "goal" : "goals"}
-          {totalSubtasks > 0 && ` \u00B7 ${totalSubtasks} subtasks`}
-        </p>
+      {/* 1. Active Goals section — always first */}
+      <div className="flex-none">
+        <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-800">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active Goals</h2>
+          <p className="text-xs text-gray-400 mt-1">
+            {goals.length} {goals.length === 1 ? "goal" : "goals"}
+            {totalSubtasks > 0 && ` \u00B7 ${totalSubtasks} subtasks`}
+          </p>
+        </div>
       </div>
 
-      {/* Everything below header scrolls together */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Suggestions */}
-        <div className="border-b border-gray-100 dark:border-gray-800 pt-3">
-          <SuggestionsPanel />
-        </div>
-
-        {/* News */}
-        <div className="border-b border-gray-100 dark:border-gray-800 pt-3">
-          <NewsPanel />
-        </div>
-
-        {/* Goals list */}
+      {/* Goals list with max 3 visible, own scroller */}
+      <div className="max-h-[280px] overflow-y-auto border-b border-gray-100 dark:border-gray-800">
         <div className="p-4 space-y-3">
-        {goals.length === 0 && (
-          <p className="text-gray-400 text-sm text-center mt-8">
-            No goals yet. Tell First Mate what you want to accomplish!
-          </p>
-        )}
+          {goals.length === 0 && (
+            <p className="text-gray-400 text-sm text-center py-4">
+              No goals yet. Tell First Mate what you want to accomplish!
+            </p>
+          )}
 
-        {goals
-          .sort((a, b) => b.priority - a.priority)
-          .map((goal) => {
+          {sortedGoals.map((goal) => {
             const priority = PRIORITY_CONFIG[goal.priority] || PRIORITY_CONFIG[3];
             const isDeleting = deletingId === goal.id;
             const isExpanded = expandedGoals.has(goal.id);
@@ -240,7 +225,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
                       className="w-5 h-5 flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-gray-900 dark:hover:text-gray-200 cursor-pointer text-xs"
                       title="Delete goal"
                     >
-                      ×
+                      &times;
                     </button>
                   </div>
 
@@ -295,7 +280,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
                     )}
                     {!isLoadingSubs && subtasks.length === 0 && (
                       <p className="text-xs text-gray-300 dark:text-gray-600 pl-2">
-                        No subtasks yet —{" "}
+                        No subtasks yet &mdash;{" "}
                         <Link href={`/dashboard/goals/${goal.id}`} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 underline">
                           decompose
                         </Link>
@@ -314,7 +299,6 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
                           }`}
                         >
                           <div className="flex items-start gap-2">
-                            {/* Status dot */}
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${dotColor}`} />
                             <div className="flex-1 min-w-0">
                               <span
@@ -338,7 +322,6 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
                                 )}
                               </div>
                             </div>
-                            {/* Status toggle button */}
                             <button
                               onClick={() => handleSubGoalStatusToggle(goal.id, sub.id, sub.status)}
                               disabled={isToggling}
@@ -357,6 +340,16 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
             );
           })}
         </div>
+      </div>
+
+      {/* 2. News section — second, with own scroller, max ~3 items visible */}
+      <div className="max-h-[250px] overflow-y-auto border-b border-gray-100 dark:border-gray-800 pt-3">
+        <NewsPanel />
+      </div>
+
+      {/* 3. Recommendations section — last, with own scroller */}
+      <div className="flex-1 overflow-y-auto pt-3">
+        <SuggestionsPanel />
       </div>
     </aside>
   );

@@ -5,6 +5,9 @@
  * plus pending blocks awaiting approval, in a weekly grid.
  * Supports week navigation, event deletion, block approve/reject/modify,
  * and scrolls from 6am to midnight.
+ *
+ * Handles overlapping events by laying them out side by side.
+ * Displays times in PST (America/Los_Angeles).
  */
 
 "use client";
@@ -29,10 +32,23 @@ interface PendingBlock {
   end_time: string;
 }
 
+// Layout item with column position for overlap handling
+interface LayoutItem {
+  item: CalendarEvent | PendingBlock;
+  type: "event" | "pending";
+  startHours: number;
+  endHours: number;
+  column: number;
+  totalColumns: number;
+}
+
 const START_HOUR = 6;
 const END_HOUR = 24;
 const HOUR_HEIGHT = 60;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// Force PST display
+const PST_TZ = "America/Los_Angeles";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -53,24 +69,32 @@ function formatTime(date: Date): string {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: PST_TZ,
     })
     .replace(" ", "")
     .toLowerCase();
 }
 
-function formatTimeFromHours(hours: number): string {
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  const period = h >= 12 ? "pm" : "am";
-  const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${displayH}:${m.toString().padStart(2, "0")}${period}`;
+/** Get hours in PST from a date string */
+function getHoursInPST(dateStr: string): number {
+  const date = new Date(dateStr);
+  // Get PST time components
+  const pstStr = date.toLocaleString("en-US", { timeZone: PST_TZ, hour12: false });
+  const parts = pstStr.split(", ")[1]?.split(":") || pstStr.split(" ")[1]?.split(":") || [];
+  const h = parseInt(parts[0] || "0", 10);
+  const m = parseInt(parts[1] || "0", 10);
+  return h + m / 60;
 }
 
-function getDayIndex(dateStr: string, weekStart: Date): number {
+/** Get the day of week (0=Mon, 6=Sun) in PST */
+function getDayIndexPST(dateStr: string, weekStart: Date): number {
   const date = new Date(dateStr);
-  const diff = Math.floor(
-    (date.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  // Get the date in PST
+  const pstDate = new Date(date.toLocaleString("en-US", { timeZone: PST_TZ }));
+  const weekStartPST = new Date(weekStart.toLocaleString("en-US", { timeZone: PST_TZ }));
+  weekStartPST.setHours(0, 0, 0, 0);
+  pstDate.setHours(0, 0, 0, 0);
+  const diff = Math.floor((pstDate.getTime() - weekStartPST.getTime()) / (1000 * 60 * 60 * 24));
   return diff;
 }
 
@@ -78,13 +102,51 @@ function getDayIndex(dateStr: string, weekStart: Date): number {
 function deduplicateEvents(events: CalendarEvent[]): CalendarEvent[] {
   const seen = new Map<string, CalendarEvent>();
   for (const event of events) {
-    // Use a composite key: summary + start time
     const key = `${event.summary || ""}|${event.start?.dateTime || event.start?.date || ""}`;
     if (!seen.has(key)) {
       seen.set(key, event);
     }
   }
   return Array.from(seen.values());
+}
+
+/** Calculate layout columns for overlapping items */
+function layoutOverlapping(items: Array<{ startHours: number; endHours: number; item: CalendarEvent | PendingBlock; type: "event" | "pending" }>): LayoutItem[] {
+  if (items.length === 0) return [];
+
+  // Sort by start time
+  const sorted = [...items].sort((a, b) => a.startHours - b.startHours);
+
+  // Assign columns using greedy algorithm
+  const columns: Array<{ endHours: number }[]> = [];
+
+  return sorted.map((item) => {
+    // Find the first column where this item fits (no overlap)
+    let col = -1;
+    for (let c = 0; c < columns.length; c++) {
+      const lastInCol = columns[c][columns[c].length - 1];
+      if (lastInCol.endHours <= item.startHours) {
+        col = c;
+        break;
+      }
+    }
+
+    if (col === -1) {
+      col = columns.length;
+      columns.push([]);
+    }
+
+    columns[col].push({ endHours: item.endHours });
+
+    return {
+      ...item,
+      column: col,
+      totalColumns: columns.length, // Will be updated in post-pass
+    };
+  }).map((item) => ({
+    ...item,
+    totalColumns: columns.length,
+  }));
 }
 
 export function CalendarView() {
@@ -112,13 +174,11 @@ export function CalendarView() {
     setError(null);
     setWarnings([]);
     try {
-      // Fetch calendar events and pending blocks in parallel
       const [eventsRes, pendingRes] = await Promise.allSettled([
         fetch(`/api/calendar/events?timeMin=${weekStartISO}&timeMax=${weekEndISO}`),
         fetch(`/api/calendar/pending?timeMin=${weekStartISO}&timeMax=${weekEndISO}`),
       ]);
 
-      // Handle calendar events
       if (eventsRes.status === "fulfilled" && eventsRes.value.ok) {
         const data = await eventsRes.value.json();
         if (data.warnings?.length > 0) {
@@ -143,7 +203,6 @@ export function CalendarView() {
         setError("Failed to load calendar events");
       }
 
-      // Handle pending blocks
       if (pendingRes.status === "fulfilled" && pendingRes.value.ok) {
         const data = await pendingRes.value.json();
         setPendingBlocks(data.pendingBlocks || []);
@@ -165,8 +224,7 @@ export function CalendarView() {
   useEffect(() => {
     if (!isLoading && scrollRef.current && !hasScrolled.current) {
       const now = new Date();
-      const currentHour = now.getHours() + now.getMinutes() / 60;
-      // Scroll so current time is about 1/3 from the top
+      const currentHour = getHoursInPST(now.toISOString());
       const scrollTarget = Math.max(0, (currentHour - START_HOUR - 2) * HOUR_HEIGHT);
       scrollRef.current.scrollTop = scrollTarget;
       hasScrolled.current = true;
@@ -203,7 +261,6 @@ export function CalendarView() {
 
   async function handleApproveBlock(blockId: string) {
     try {
-      // If editing this block, include modifications
       const modifications =
         editingBlock === blockId && editStart && editEnd
           ? [{ blockId, newStart: editStart, newEnd: editEnd }]
@@ -244,7 +301,6 @@ export function CalendarView() {
 
   function startEditingBlock(block: PendingBlock) {
     setEditingBlock(block.id);
-    // Pre-fill with current times in datetime-local format
     setEditStart(block.start_time.slice(0, 16));
     setEditEnd(block.end_time.slice(0, 16));
   }
@@ -265,7 +321,7 @@ export function CalendarView() {
             &larr;
           </button>
           <span className="text-sm font-medium text-gray-900 dark:text-gray-100 min-w-[160px] text-center">
-            {formatDate(weekStart)} —{" "}
+            {formatDate(weekStart)} &mdash;{" "}
             {formatDate(new Date(weekEnd.getTime() - 1))}
           </span>
           <button
@@ -277,8 +333,9 @@ export function CalendarView() {
         </div>
 
         <div className="flex items-center gap-3">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500">PST</span>
           {pendingCount > 0 && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+            <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full font-medium">
               {pendingCount} pending
             </span>
           )}
@@ -330,7 +387,7 @@ export function CalendarView() {
         </div>
       )}
 
-      {/* Calendar grid — scrollable */}
+      {/* Calendar grid */}
       {!isLoading && !error && (
         <>
           {/* Sticky day headers */}
@@ -343,9 +400,9 @@ export function CalendarView() {
               return (
                 <div
                   key={day}
-                  className={`flex-1 min-w-[90px] h-10 flex items-center justify-center border-l border-gray-50 text-xs ${
+                  className={`flex-1 min-w-[90px] h-10 flex items-center justify-center border-l border-gray-50 dark:border-gray-800/50 text-xs ${
                     isToday
-                      ? "text-gray-900 dark:text-gray-100 font-semibold"
+                      ? "text-gray-900 dark:text-gray-100 font-semibold bg-blue-50/50 dark:bg-blue-900/10"
                       : "text-gray-400 dark:text-gray-500"
                   }`}
                 >
@@ -378,23 +435,54 @@ export function CalendarView() {
                 dayDate.setDate(dayDate.getDate() + dayIndex);
                 const isToday = dayDate.toDateString() === today.toDateString();
 
-                // Filter events for this day
+                // Filter events for this day (using PST timezone)
                 const dayEvents = events.filter((event) => {
                   if (!event.start?.dateTime) return false;
-                  return getDayIndex(event.start.dateTime, weekStart) === dayIndex;
+                  return getDayIndexPST(event.start.dateTime, weekStart) === dayIndex;
                 });
 
                 // Filter pending blocks for this day
                 const dayPending = pendingBlocks.filter((block) => {
-                  return getDayIndex(block.start_time, weekStart) === dayIndex;
+                  return getDayIndexPST(block.start_time, weekStart) === dayIndex;
                 });
+
+                // Combine all items for overlap calculation
+                const allItems: Array<{ startHours: number; endHours: number; item: CalendarEvent | PendingBlock; type: "event" | "pending" }> = [];
+
+                for (const event of dayEvents) {
+                  const startHours = getHoursInPST(event.start.dateTime!);
+                  const endHours = getHoursInPST(event.end!.dateTime!);
+                  const effectiveEnd = endHours === 0 ? 24 : endHours;
+                  allItems.push({
+                    startHours: Math.max(startHours, START_HOUR),
+                    endHours: Math.min(effectiveEnd, END_HOUR),
+                    item: event,
+                    type: "event",
+                  });
+                }
+
+                for (const block of dayPending) {
+                  const startHours = getHoursInPST(block.start_time);
+                  const endHours = getHoursInPST(block.end_time);
+                  const effectiveEnd = endHours === 0 ? 24 : endHours;
+                  allItems.push({
+                    startHours: Math.max(startHours, START_HOUR),
+                    endHours: Math.min(effectiveEnd, END_HOUR),
+                    item: block,
+                    type: "pending",
+                  });
+                }
+
+                // Layout overlapping items
+                const layoutItems = layoutOverlapping(allItems);
 
                 return (
                   <div
                     key={day}
-                    className="flex-1 min-w-[90px] border-l border-gray-50 dark:border-gray-800/50"
+                    className={`flex-1 min-w-[90px] border-l border-gray-50 dark:border-gray-800/50 ${
+                      isToday ? "bg-blue-50/20 dark:bg-blue-900/5" : ""
+                    }`}
                   >
-                    {/* Hour grid + events + pending blocks */}
                     <div className="relative">
                       {/* Hour lines */}
                       {Array.from(
@@ -410,7 +498,7 @@ export function CalendarView() {
 
                       {/* Current time indicator */}
                       {isToday && (() => {
-                        const nowHour = today.getHours() + today.getMinutes() / 60;
+                        const nowHour = getHoursInPST(new Date().toISOString());
                         if (nowHour >= START_HOUR && nowHour <= END_HOUR) {
                           const top = (nowHour - START_HOUR) * HOUR_HEIGHT;
                           return (
@@ -425,184 +513,155 @@ export function CalendarView() {
                         return null;
                       })()}
 
-                      {/* Real Google Calendar events */}
-                      {dayEvents.map((event) => {
-                        const start = new Date(event.start.dateTime!);
-                        const end = new Date(event.end.dateTime!);
-                        const startHours =
-                          start.getHours() + start.getMinutes() / 60;
-                        const endHours =
-                          end.getHours() + end.getMinutes() / 60;
+                      {/* Laid-out items */}
+                      {layoutItems.map((layoutItem) => {
+                        const { startHours, endHours, column, totalColumns, type, item } = layoutItem;
 
-                        // Handle midnight-crossing events
-                        const effectiveEnd = endHours === 0 ? 24 : endHours;
-                        const clampedStart = Math.max(startHours, START_HOUR);
-                        const clampedEnd = Math.min(effectiveEnd, END_HOUR);
-                        if (clampedEnd <= clampedStart) return null;
+                        if (endHours <= startHours) return null;
 
-                        const top =
-                          (clampedStart - START_HOUR) * HOUR_HEIGHT;
-                        const height =
-                          (clampedEnd - clampedStart) * HOUR_HEIGHT;
+                        const top = (startHours - START_HOUR) * HOUR_HEIGHT;
+                        const height = (endHours - startHours) * HOUR_HEIGHT;
 
-                        const isAppEvent =
-                          event.extendedProperties?.private
-                            ?.firstMateManaged === "true";
+                        // Calculate width and left based on columns
+                        const colWidth = 100 / totalColumns;
+                        const left = `${column * colWidth}%`;
+                        const width = `${colWidth - 1}%`;
 
-                        return (
-                          <div
-                            key={event.id}
-                            className={`absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-hidden group/event z-10 ${
-                              event.calendarType === "work"
-                                ? "bg-gray-900 text-white"
-                                : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                            }`}
-                            style={{ top, height: Math.max(height, 18) }}
-                          >
-                            <div className="flex items-start gap-1">
-                              {isAppEvent && (
-                                <span
-                                  className={`inline-block w-1.5 h-1.5 rounded-full mt-1 flex-none ${
-                                    event.calendarType === "work"
-                                      ? "bg-white/60"
-                                      : "bg-gray-500"
-                                  }`}
-                                />
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[10px] font-medium truncate leading-tight">
-                                  {event.summary || "(No title)"}
-                                </p>
-                                {height > 28 && (
-                                  <p
-                                    className={`text-[9px] leading-tight ${
-                                      event.calendarType === "work"
-                                        ? "text-white/60"
-                                        : "text-gray-500"
-                                    }`}
-                                  >
-                                    {formatTime(start)}–{formatTime(end)}
+                        if (type === "event") {
+                          const event = item as CalendarEvent;
+                          const isAppEvent =
+                            event.extendedProperties?.private
+                              ?.firstMateManaged === "true";
+
+                          return (
+                            <div
+                              key={event.id}
+                              className={`absolute rounded-md px-1.5 py-0.5 overflow-hidden group/event z-10 ${
+                                event.calendarType === "work"
+                                  ? "bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900"
+                                  : "bg-blue-500 dark:bg-blue-600 text-white"
+                              }`}
+                              style={{
+                                top,
+                                height: Math.max(height, 20),
+                                left,
+                                width,
+                              }}
+                            >
+                              <div className="flex items-start gap-1">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-medium truncate leading-tight">
+                                    {event.summary || "(No title)"}
                                   </p>
-                                )}
-                              </div>
-                              {isAppEvent && (
-                                <button
-                                  onClick={() =>
-                                    handleDeleteEvent(
-                                      event.id,
-                                      event.calendarType
-                                    )
-                                  }
-                                  className={`opacity-0 group-hover/event:opacity-100 transition-opacity cursor-pointer flex-none text-[10px] leading-none mt-0.5 ${
-                                    event.calendarType === "work"
-                                      ? "text-white/50 hover:text-white"
-                                      : "text-gray-400 hover:text-gray-900"
-                                  }`}
-                                  title="Delete event"
-                                >
-                                  ×
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Pending blocks (awaiting approval) */}
-                      {dayPending.map((block) => {
-                        const start = new Date(block.start_time);
-                        const end = new Date(block.end_time);
-                        const startHours =
-                          start.getHours() + start.getMinutes() / 60;
-                        const endHours =
-                          end.getHours() + end.getMinutes() / 60;
-
-                        const effectiveEnd = endHours === 0 ? 24 : endHours;
-                        const clampedStart = Math.max(startHours, START_HOUR);
-                        const clampedEnd = Math.min(effectiveEnd, END_HOUR);
-                        if (clampedEnd <= clampedStart) return null;
-
-                        const top =
-                          (clampedStart - START_HOUR) * HOUR_HEIGHT;
-                        const height =
-                          (clampedEnd - clampedStart) * HOUR_HEIGHT;
-                        const isEditing = editingBlock === block.id;
-
-                        return (
-                          <div
-                            key={`pending-${block.id}`}
-                            className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 overflow-visible border-2 border-dashed border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 z-10"
-                            style={{ top, height: Math.max(height, isEditing ? 80 : 32) }}
-                          >
-                            <div className="flex flex-col h-full">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-medium text-gray-700 dark:text-gray-300 truncate leading-tight">
-                                  {block.goal_title}
-                                </p>
-                                <p className="text-[9px] text-gray-400 leading-tight">
-                                  {formatTime(start)}–{formatTime(end)} · Pending
-                                </p>
-                              </div>
-
-                              {/* Edit form */}
-                              {isEditing && (
-                                <div className="mt-1 space-y-1 bg-white dark:bg-gray-800 rounded p-1 border border-gray-200 dark:border-gray-700 shadow-sm">
-                                  <input
-                                    type="datetime-local"
-                                    value={editStart}
-                                    onChange={(e) => setEditStart(e.target.value)}
-                                    className="w-full text-[10px] border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded px-1 py-0.5"
-                                  />
-                                  <input
-                                    type="datetime-local"
-                                    value={editEnd}
-                                    onChange={(e) => setEditEnd(e.target.value)}
-                                    className="w-full text-[10px] border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded px-1 py-0.5"
-                                  />
+                                  {height > 28 && (
+                                    <p className="text-[9px] leading-tight opacity-70">
+                                      {formatTime(new Date(event.start.dateTime!))}&ndash;{formatTime(new Date(event.end!.dateTime!))}
+                                    </p>
+                                  )}
                                 </div>
-                              )}
-
-                              {/* Approve / Edit / Reject buttons */}
-                              <div className="flex gap-1 mt-0.5">
-                                <button
-                                  onClick={() => handleApproveBlock(block.id)}
-                                  className="text-[10px] text-green-700 hover:bg-green-100 px-1.5 py-0.5 rounded cursor-pointer font-medium"
-                                  title={isEditing ? "Approve with changes" : "Approve"}
-                                >
-                                  ✓
-                                </button>
-                                {!isEditing ? (
+                                {isAppEvent && (
                                   <button
-                                    onClick={() => startEditingBlock(block)}
-                                    className="text-[10px] text-blue-600 hover:bg-blue-100 px-1.5 py-0.5 rounded cursor-pointer"
-                                    title="Edit time"
+                                    onClick={() =>
+                                      handleDeleteEvent(
+                                        event.id,
+                                        event.calendarType
+                                      )
+                                    }
+                                    className="opacity-0 group-hover/event:opacity-100 transition-opacity cursor-pointer flex-none text-[10px] leading-none mt-0.5 text-white/50 hover:text-white"
+                                    title="Delete event"
                                   >
-                                    ✎
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => {
-                                      setEditingBlock(null);
-                                      setEditStart("");
-                                      setEditEnd("");
-                                    }}
-                                    className="text-[10px] text-gray-400 hover:bg-gray-200 px-1.5 py-0.5 rounded cursor-pointer"
-                                    title="Cancel edit"
-                                  >
-                                    ↩
+                                    x
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => handleRejectBlock(block.id)}
-                                  className="text-[10px] text-red-400 hover:text-red-700 hover:bg-red-100 px-1.5 py-0.5 rounded cursor-pointer"
-                                  title="Reject"
-                                >
-                                  ×
-                                </button>
                               </div>
                             </div>
-                          </div>
-                        );
+                          );
+                        } else {
+                          // Pending block
+                          const block = item as PendingBlock;
+                          const isEditing = editingBlock === block.id;
+
+                          return (
+                            <div
+                              key={`pending-${block.id}`}
+                              className="absolute rounded-md px-1.5 py-0.5 overflow-visible border-2 border-dashed border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 z-10"
+                              style={{
+                                top,
+                                height: Math.max(height, isEditing ? 80 : 32),
+                                left,
+                                width,
+                              }}
+                            >
+                              <div className="flex flex-col h-full">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] font-medium text-gray-700 dark:text-gray-300 truncate leading-tight">
+                                    {block.goal_title}
+                                  </p>
+                                  <p className="text-[9px] text-gray-400 leading-tight">
+                                    {formatTime(new Date(block.start_time))}&ndash;{formatTime(new Date(block.end_time))} &middot; Pending
+                                  </p>
+                                </div>
+
+                                {/* Edit form */}
+                                {isEditing && (
+                                  <div className="mt-1 space-y-1 bg-white dark:bg-gray-800 rounded p-1 border border-gray-200 dark:border-gray-700 shadow-sm">
+                                    <input
+                                      type="datetime-local"
+                                      value={editStart}
+                                      onChange={(e) => setEditStart(e.target.value)}
+                                      className="w-full text-[10px] border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded px-1 py-0.5"
+                                    />
+                                    <input
+                                      type="datetime-local"
+                                      value={editEnd}
+                                      onChange={(e) => setEditEnd(e.target.value)}
+                                      className="w-full text-[10px] border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 rounded px-1 py-0.5"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* Approve / Edit / Reject buttons */}
+                                <div className="flex gap-1 mt-0.5">
+                                  <button
+                                    onClick={() => handleApproveBlock(block.id)}
+                                    className="text-[10px] text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 px-1.5 py-0.5 rounded cursor-pointer font-medium"
+                                    title={isEditing ? "Approve with changes" : "Approve"}
+                                  >
+                                    &#10003;
+                                  </button>
+                                  {!isEditing ? (
+                                    <button
+                                      onClick={() => startEditingBlock(block)}
+                                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 px-1.5 py-0.5 rounded cursor-pointer"
+                                      title="Edit time"
+                                    >
+                                      &#9998;
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        setEditingBlock(null);
+                                        setEditStart("");
+                                        setEditEnd("");
+                                      }}
+                                      className="text-[10px] text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 px-1.5 py-0.5 rounded cursor-pointer"
+                                      title="Cancel edit"
+                                    >
+                                      &#8617;
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleRejectBlock(block.id)}
+                                    className="text-[10px] text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 px-1.5 py-0.5 rounded cursor-pointer"
+                                    title="Reject"
+                                  >
+                                    x
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
                       })}
                     </div>
                   </div>

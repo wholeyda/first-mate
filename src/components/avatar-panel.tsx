@@ -1,14 +1,9 @@
 /**
  * Avatar Panel Component
  *
- * Sidebar panel that wraps the First Mate particle avatar
- * with the user description and removable trait tags.
- *
- * Displayed on the left side of the dashboard. Shows:
- *  - Animated particle avatar (evolves with completed goals)
- *  - Completed goals counter
- *  - Short user personality description
- *  - Trait tags with remove capability
+ * Sidebar panel with Dark Voyager-style avatar.
+ * Shows avatar, goal count, personality description, trait tags.
+ * Gender toggle and accent color picker for customization.
  */
 
 "use client";
@@ -23,6 +18,17 @@ interface AvatarPanelProps {
   onRemoveTrait?: (trait: string) => void;
 }
 
+const ACCENT_COLORS = [
+  { hex: "#FF9500", label: "Amber" },
+  { hex: "#FF6B00", label: "Orange" },
+  { hex: "#FF2D55", label: "Pink" },
+  { hex: "#7B61FF", label: "Purple" },
+  { hex: "#00E5FF", label: "Cyan" },
+  { hex: "#00FF94", label: "Green" },
+  { hex: "#FFD700", label: "Gold" },
+  { hex: "#FF4444", label: "Red" },
+];
+
 export function AvatarPanel({
   completedGoalCount,
   traits,
@@ -30,11 +36,19 @@ export function AvatarPanel({
   onRemoveTrait,
 }: AvatarPanelProps) {
   const [editingTraits, setEditingTraits] = useState(false);
+  const [gender, setGender] = useState<"male" | "female" | "neutral">("neutral");
+  const [accentColor, setAccentColor] = useState<string | undefined>(undefined);
+  const [showCustomize, setShowCustomize] = useState(false);
 
   return (
     <div className="flex flex-col items-center p-4 border-b border-gray-100 dark:border-gray-800">
-      {/* Animated particle avatar */}
-      <FirstMateAvatar completedGoalCount={completedGoalCount} traits={traits} />
+      {/* Animated avatar */}
+      <FirstMateAvatar
+        completedGoalCount={completedGoalCount}
+        traits={traits}
+        gender={gender}
+        accentColor={accentColor}
+      />
 
       {/* Completed goals counter */}
       <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">
@@ -42,6 +56,74 @@ export function AvatarPanel({
           ? "Complete a goal to evolve!"
           : `${completedGoalCount} goal${completedGoalCount === 1 ? "" : "s"} completed`}
       </p>
+
+      {/* Customize toggle */}
+      <button
+        onClick={() => setShowCustomize(!showCustomize)}
+        className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer mt-2 transition-colors"
+      >
+        {showCustomize ? "Hide" : "Customize"}
+      </button>
+
+      {/* Customization panel */}
+      {showCustomize && (
+        <div className="w-full mt-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800">
+          {/* Gender toggle */}
+          <div className="mb-2">
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">
+              Body Type
+            </span>
+            <div className="flex gap-1">
+              {(["neutral", "male", "female"] as const).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGender(g)}
+                  className={`flex-1 text-[10px] px-2 py-1 rounded-md cursor-pointer transition-colors ${
+                    gender === g
+                      ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-medium"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {g.charAt(0).toUpperCase() + g.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Accent color picker */}
+          <div>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">
+              Accent Color
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {ACCENT_COLORS.map((c) => (
+                <button
+                  key={c.hex}
+                  onClick={() => setAccentColor(c.hex)}
+                  className={`w-5 h-5 rounded-full cursor-pointer transition-all ${
+                    accentColor === c.hex
+                      ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500 dark:ring-offset-gray-900 scale-110"
+                      : "hover:scale-110"
+                  }`}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.label}
+                />
+              ))}
+              <button
+                onClick={() => setAccentColor(undefined)}
+                className={`w-5 h-5 rounded-full cursor-pointer border border-gray-200 dark:border-gray-700 text-[8px] text-gray-400 flex items-center justify-center transition-all ${
+                  accentColor === undefined
+                    ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500 dark:ring-offset-gray-900"
+                    : ""
+                }`}
+                title="Auto (trait-based)"
+              >
+                A
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User description */}
       {userDescription && (
