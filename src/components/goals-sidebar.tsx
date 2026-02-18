@@ -183,8 +183,8 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
         </div>
       </div>
 
-      {/* Goals list with max 3 visible, own scroller */}
-      <div className="max-h-[280px] overflow-y-auto border-b border-gray-100 dark:border-gray-800">
+      {/* Goals list — 2 visible, scrolls for more */}
+      <div className="max-h-[220px] overflow-y-auto border-b border-gray-100 dark:border-gray-800">
         <div className="p-4 space-y-3">
           {goals.length === 0 && (
             <p className="text-gray-400 text-sm text-center py-4">
@@ -342,14 +342,14 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
         </div>
       </div>
 
-      {/* 2. News section — second, with own scroller, max ~3 items visible */}
-      <div className="max-h-[250px] overflow-y-auto border-b border-gray-100 dark:border-gray-800 pt-3">
-        <NewsPanel />
+      {/* 2. News section — 2 items visible */}
+      <div className="max-h-[200px] overflow-y-auto border-b border-gray-100 dark:border-gray-800 pt-2">
+        <NewsPanel maxItems={2} />
       </div>
 
-      {/* 3. Recommendations section — last, with own scroller */}
-      <div className="flex-1 overflow-y-auto pt-3">
-        <SuggestionsPanel />
+      {/* 3. Recommendations section — 2 items visible */}
+      <div className="flex-1 overflow-y-auto pt-2">
+        <SuggestionsPanel maxItems={2} />
       </div>
     </aside>
   );

@@ -25,7 +25,7 @@ const TYPE_ICONS: Record<string, string> = {
   course: "○",
 };
 
-export function SuggestionsPanel() {
+export function SuggestionsPanel({ maxItems }: { maxItems?: number }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dismissedUrls, setDismissedUrls] = useState<string[]>([]);
@@ -69,12 +69,12 @@ export function SuggestionsPanel() {
 
   if (isLoading && suggestions.length === 0) {
     return (
-      <div className="px-4 pb-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+      <div className="px-4 pb-3">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
           Recommendations
         </h3>
         <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
+          {[1, 2].map((i) => (
             <div
               key={i}
               className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 animate-pulse"
@@ -95,9 +95,11 @@ export function SuggestionsPanel() {
 
   if (suggestions.length === 0 && !isLoading) return null;
 
+  const displaySuggestions = maxItems ? suggestions.slice(0, maxItems) : suggestions;
+
   return (
-    <div className="px-4 pb-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="px-4 pb-3">
+      <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Recommendations
         </h3>
@@ -111,7 +113,7 @@ export function SuggestionsPanel() {
         </button>
       </div>
       <div className="space-y-2">
-        {suggestions.map((suggestion, index) => (
+        {displaySuggestions.map((suggestion, index) => (
           <div
             key={index}
             className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 hover:border-gray-300 dark:hover:border-gray-600 transition-colors relative group"

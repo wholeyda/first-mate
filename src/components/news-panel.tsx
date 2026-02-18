@@ -20,7 +20,7 @@ interface NewsItem {
   publishedAt: string;
 }
 
-export function NewsPanel() {
+export function NewsPanel({ maxItems }: { maxItems?: number }) {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,12 +53,12 @@ export function NewsPanel() {
 
   if (isLoading && news.length === 0) {
     return (
-      <div className="px-4 pb-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+      <div className="px-4 pb-3">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
           Tips & Resources
         </h3>
         <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
+          {[1, 2].map((i) => (
             <div
               key={i}
               className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 animate-pulse"
@@ -84,9 +84,11 @@ export function NewsPanel() {
     );
   }
 
+  const displayNews = maxItems ? news.slice(0, maxItems) : news;
+
   return (
-    <div className="px-4 pb-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="px-4 pb-3">
+      <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Tips & Resources
         </h3>
@@ -100,7 +102,7 @@ export function NewsPanel() {
         </button>
       </div>
       <div className="space-y-2">
-        {news.map((item, index) => (
+        {displayNews.map((item, index) => (
           <div
             key={index}
             className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 hover:border-gray-300 dark:hover:border-gray-600 transition-colors relative group"
