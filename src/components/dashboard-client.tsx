@@ -1,21 +1,19 @@
 /**
  * Dashboard Client Component
  *
- * Minimalist layout with tabs: Chat, Calendar, Resume.
+ * Two-panel layout: main content (Chat/Calendar/Resume) + goals sidebar.
  * Goals sidebar on the right with AEIOU completion flow.
- * Sub-goals are treated as first-class items in the sidebar.
  */
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Chat } from "@/components/chat";
 import { GoalsSidebar } from "@/components/goals-sidebar";
 import { CalendarView } from "@/components/calendar-view";
 import { ResumePanel } from "@/components/resume-panel";
 import { AeiouModal } from "@/components/aeiou-modal";
 import { IslandReveal } from "@/components/island-reveal";
-import { AvatarPanel } from "@/components/avatar-panel";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { Goal, Island } from "@/types/database";
 import {
@@ -39,43 +37,9 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const [islands, setIslands] = useState<Island[]>([]);
   const [completingGoal, setCompletingGoal] = useState<Goal | null>(null);
   const [revealIsland, setRevealIsland] = useState<{ island: Island; goalTitle: string } | null>(null);
-  const [avatarExpanded, setAvatarExpanded] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-
-  // Avatar state
-  const [avatarData, setAvatarData] = useState<{ description: string; traits: string[] }>({
-    description: "",
-    traits: [],
-  });
   const [localCompletedCount, setLocalCompletedCount] = useState(completedGoalCount);
-
-  // Fetch avatar personality data on mount
-  useEffect(() => {
-    async function fetchAvatarData() {
-      try {
-        const res = await fetch("/api/avatar");
-        if (res.ok) {
-          const data = await res.json();
-          setAvatarData({
-            description: data.description || "",
-            traits: data.traits || [],
-          });
-        }
-      } catch {
-        // Silent fail for avatar data
-      }
-    }
-    fetchAvatarData();
-  }, []);
-
-  // Handle removing a trait
-  const handleRemoveTrait = useCallback((trait: string) => {
-    setAvatarData((prev) => ({
-      ...prev,
-      traits: prev.traits.filter((t) => t !== trait),
-    }));
-  }, []);
 
   // Initialize notifications on mount
   useEffect(() => {
@@ -127,7 +91,6 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
 
   function handleGoalDeleted(goalId: string) {
     setGoals((prev) => prev.filter((g) => g.id !== goalId));
-    // Also remove sub-goals belonging to deleted goal
     setSubGoals((prev) => prev.filter((sg) => sg.parent_goal_id !== goalId));
   }
 
@@ -148,7 +111,6 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   async function handleAeiouSuccess(aeiouResponseId: string) {
     if (!completingGoal) return;
 
-    // Create planet via API
     try {
       const res = await fetch("/api/islands", {
         method: "POST",
@@ -164,7 +126,6 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         const data = await res.json();
         const island = data.island as Island;
         setIslands((prev) => [...prev, island]);
-        // Move goal to completed
         setGoals((prev) =>
           prev.map((g) =>
             g.id === completingGoal.id ? { ...g, status: "completed" as const } : g
@@ -175,7 +136,6 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         setRevealIsland({ island, goalTitle: completingGoal.title });
       }
     } catch {
-      // Fall back — just close
       setCompletingGoal(null);
     }
   }
@@ -189,7 +149,6 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
     setSubGoals([]);
     setIslands([]);
     setLocalCompletedCount(0);
-    setAvatarData({ description: "Just getting started! Complete some goals to reveal your character.", traits: [] });
   }
 
   async function handleResetAllData() {
@@ -208,20 +167,7 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const activeGoals = goals.filter((g) => g.status === "active");
 
   return (
-    <div className="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
-      {/* Avatar panel - left side */}
-      <div className={`${avatarExpanded ? 'w-80' : 'w-48'} border-r border-gray-100 dark:border-gray-800 overflow-y-auto bg-white dark:bg-gray-950 hidden lg:block transition-all duration-300 relative`}>
-        <button onClick={() => setAvatarExpanded(!avatarExpanded)} className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-xs cursor-pointer z-10 bg-gray-100 dark:bg-gray-800 rounded-full">
-          {avatarExpanded ? '\u00AB' : '\u00BB'}
-        </button>
-        <AvatarPanel
-          completedGoalCount={localCompletedCount}
-          traits={avatarData.traits}
-          userDescription={avatarData.description}
-          onRemoveTrait={handleRemoveTrait}
-        />
-      </div>
-
+    <div className="flex flex-1 overflow-hidden w-full">
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
