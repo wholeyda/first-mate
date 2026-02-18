@@ -16,7 +16,6 @@ import { ResumePanel } from "@/components/resume-panel";
 import { AeiouModal } from "@/components/aeiou-modal";
 import { IslandReveal } from "@/components/island-reveal";
 import { AvatarPanel } from "@/components/avatar-panel";
-import { AvatarScene } from "@/components/avatar/AvatarScene";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { Goal, Island } from "@/types/database";
 import {
@@ -31,7 +30,7 @@ interface DashboardClientProps {
   completedGoalCount?: number;
 }
 
-type Tab = "chat" | "avatar" | "calendar" | "resume";
+type Tab = "chat" | "calendar" | "resume";
 
 export function DashboardClient({ initialGoals, initialSubGoals = [], completedGoalCount = 0 }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
@@ -228,7 +227,7 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         {/* Tab bar */}
         <div className="flex items-center justify-between px-4 pt-2 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-1">
-            {(["chat", "avatar", "calendar", "resume"] as Tab[]).map((tab) => (
+            {(["chat", "calendar", "resume"] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -239,7 +238,6 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
                 }`}
               >
                 {tab === "chat" && "Chat"}
-                {tab === "avatar" && "Avatar"}
                 {tab === "calendar" && "Calendar"}
                 {tab === "resume" && "Resume"}
               </button>
@@ -259,7 +257,6 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
           {activeTab === "chat" && (
             <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} onHistoryCleared={handleHistoryCleared} />
           )}
-          {activeTab === "avatar" && <AvatarScene externalGoalCount={localCompletedCount} />}
           {activeTab === "calendar" && <CalendarView />}
           {activeTab === "resume" && <ResumePanel />}
         </div>

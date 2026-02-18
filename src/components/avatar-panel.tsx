@@ -1,15 +1,15 @@
 /**
  * Avatar Panel Component
  *
- * Sidebar panel with Dark Voyager-style avatar.
- * Shows avatar, goal count, personality description, trait tags.
- * Gender toggle and accent color picker for customization.
+ * Sidebar panel with premium SVG space explorer avatar.
+ * Shows character with tier-based evolution, goal count,
+ * personality description, trait tags, and accent color picker.
  */
 
 "use client";
 
 import { useState } from "react";
-import { FirstMateAvatar } from "./first-mate-avatar";
+import { SidebarCharacter } from "./avatar/SidebarCharacter";
 
 interface AvatarPanelProps {
   completedGoalCount: number;
@@ -36,17 +36,15 @@ export function AvatarPanel({
   onRemoveTrait,
 }: AvatarPanelProps) {
   const [editingTraits, setEditingTraits] = useState(false);
-  const [gender, setGender] = useState<"male" | "female" | "neutral">("neutral");
   const [accentColor, setAccentColor] = useState<string | undefined>(undefined);
   const [showCustomize, setShowCustomize] = useState(false);
 
   return (
     <div className="flex flex-col items-center p-4 border-b border-gray-100 dark:border-gray-800">
-      {/* Animated avatar */}
-      <FirstMateAvatar
+      {/* Animated SVG avatar */}
+      <SidebarCharacter
         completedGoalCount={completedGoalCount}
         traits={traits}
-        gender={gender}
         accentColor={accentColor}
       />
 
@@ -68,28 +66,6 @@ export function AvatarPanel({
       {/* Customization panel */}
       {showCustomize && (
         <div className="w-full mt-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800">
-          {/* Gender toggle */}
-          <div className="mb-2">
-            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">
-              Body Type
-            </span>
-            <div className="flex gap-1">
-              {(["neutral", "male", "female"] as const).map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setGender(g)}
-                  className={`flex-1 text-[10px] px-2 py-1 rounded-md cursor-pointer transition-colors ${
-                    gender === g
-                      ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-medium"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {g.charAt(0).toUpperCase() + g.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Accent color picker */}
           <div>
             <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">
