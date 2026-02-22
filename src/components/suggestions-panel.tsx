@@ -69,8 +69,8 @@ export function SuggestionsPanel({ maxItems }: { maxItems?: number }) {
 
   if (isLoading && suggestions.length === 0) {
     return (
-      <div className="px-4 pb-3">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+      <div className="px-5 pb-1">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
           Recommendations
         </h3>
         <div className="space-y-2">
@@ -98,8 +98,8 @@ export function SuggestionsPanel({ maxItems }: { maxItems?: number }) {
   const displaySuggestions = maxItems ? suggestions.slice(0, maxItems) : suggestions;
 
   return (
-    <div className="px-4 pb-3">
-      <div className="flex items-center justify-between mb-2">
+    <div className="px-5 pb-1">
+      <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Recommendations
         </h3>
@@ -112,7 +112,7 @@ export function SuggestionsPanel({ maxItems }: { maxItems?: number }) {
           ↻
         </button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {displaySuggestions.map((suggestion, index) => (
           <div
             key={index}

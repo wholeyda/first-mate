@@ -44,7 +44,7 @@ interface LayoutItem {
 
 const START_HOUR = 6;
 const END_HOUR = 24;
-const HOUR_HEIGHT = 60;
+const HOUR_HEIGHT = 80;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // Force PST display
@@ -391,8 +391,8 @@ export function CalendarView() {
       {!isLoading && !error && (
         <>
           {/* Sticky day headers */}
-          <div className="flex min-w-[700px] border-b border-gray-100 dark:border-gray-800 flex-none">
-            <div className="w-14 flex-none" />
+          <div className="flex min-w-[900px] border-b border-gray-100 dark:border-gray-800 flex-none">
+            <div className="w-16 flex-none" />
             {DAYS.map((day, dayIndex) => {
               const dayDate = new Date(weekStart);
               dayDate.setDate(dayDate.getDate() + dayIndex);
@@ -400,7 +400,7 @@ export function CalendarView() {
               return (
                 <div
                   key={day}
-                  className={`flex-1 min-w-[90px] h-10 flex items-center justify-center border-l border-gray-50 dark:border-gray-800/50 text-xs ${
+                  className={`flex-1 min-w-[120px] h-11 flex items-center justify-center border-l border-gray-50 dark:border-gray-800/50 text-xs ${
                     isToday
                       ? "text-gray-900 dark:text-gray-100 font-semibold bg-blue-50/50 dark:bg-blue-900/10"
                       : "text-gray-400 dark:text-gray-500"
@@ -414,14 +414,14 @@ export function CalendarView() {
 
           {/* Scrollable time grid */}
           <div className="flex-1 overflow-auto" ref={scrollRef}>
-            <div className="flex min-w-[700px]">
+            <div className="flex min-w-[900px]">
               {/* Time labels column */}
-              <div className="w-14 flex-none">
+              <div className="w-16 flex-none">
                 {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => {
                   const hour = START_HOUR + i;
                   return (
                     <div key={i} className="relative" style={{ height: HOUR_HEIGHT }}>
-                      <span className="absolute top-[-7px] right-2 text-[10px] text-gray-300 dark:text-gray-600">
+                      <span className="absolute top-[-7px] right-2 text-[11px] text-gray-400 dark:text-gray-500">
                         {hour === 0 ? "12a" : hour === 12 ? "12p" : hour > 12 ? `${hour - 12}p` : `${hour}a`}
                       </span>
                     </div>
@@ -479,7 +479,7 @@ export function CalendarView() {
                 return (
                   <div
                     key={day}
-                    className={`flex-1 min-w-[90px] border-l border-gray-50 dark:border-gray-800/50 ${
+                    className={`flex-1 min-w-[120px] border-l border-gray-50 dark:border-gray-800/50 ${
                       isToday ? "bg-blue-50/20 dark:bg-blue-900/5" : ""
                     }`}
                   >
@@ -536,25 +536,25 @@ export function CalendarView() {
                           return (
                             <div
                               key={event.id}
-                              className={`absolute rounded-md px-1.5 py-0.5 overflow-hidden group/event z-10 ${
+                              className={`absolute rounded-md px-2 py-1 overflow-hidden group/event z-10 ${
                                 event.calendarType === "work"
                                   ? "bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900"
                                   : "bg-blue-500 dark:bg-blue-600 text-white"
                               }`}
                               style={{
                                 top,
-                                height: Math.max(height, 20),
+                                height: Math.max(height, 24),
                                 left,
                                 width,
                               }}
                             >
                               <div className="flex items-start gap-1">
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-[10px] font-medium truncate leading-tight">
+                                  <p className="text-xs font-medium truncate leading-snug">
                                     {event.summary || "(No title)"}
                                   </p>
-                                  {height > 28 && (
-                                    <p className="text-[9px] leading-tight opacity-70">
+                                  {height > 32 && (
+                                    <p className="text-[11px] leading-snug opacity-75 mt-0.5">
                                       {formatTime(new Date(event.start.dateTime!))}&ndash;{formatTime(new Date(event.end!.dateTime!))}
                                     </p>
                                   )}
@@ -584,20 +584,20 @@ export function CalendarView() {
                           return (
                             <div
                               key={`pending-${block.id}`}
-                              className="absolute rounded-md px-1.5 py-0.5 overflow-visible border-2 border-dashed border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 z-10"
+                              className="absolute rounded-md px-2 py-1 overflow-visible border-2 border-dashed border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 z-10"
                               style={{
                                 top,
-                                height: Math.max(height, isEditing ? 80 : 32),
+                                height: Math.max(height, isEditing ? 90 : 36),
                                 left,
                                 width,
                               }}
                             >
                               <div className="flex flex-col h-full">
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-[10px] font-medium text-gray-700 dark:text-gray-300 truncate leading-tight">
+                                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate leading-snug">
                                     {block.goal_title}
                                   </p>
-                                  <p className="text-[9px] text-gray-400 leading-tight">
+                                  <p className="text-[11px] text-gray-400 leading-snug mt-0.5">
                                     {formatTime(new Date(block.start_time))}&ndash;{formatTime(new Date(block.end_time))} &middot; Pending
                                   </p>
                                 </div>

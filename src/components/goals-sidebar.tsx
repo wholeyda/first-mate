@@ -174,7 +174,7 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
     <aside className="w-80 border-l border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* 1. Active Goals section — always first */}
       <div className="flex-none">
-        <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active Goals</h2>
           <p className="text-xs text-gray-400 mt-1">
             {goals.length} {goals.length === 1 ? "goal" : "goals"}
@@ -184,8 +184,8 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
       </div>
 
       {/* Goals list — 2 visible, scrolls for more */}
-      <div className="max-h-[220px] overflow-y-auto border-b border-gray-100 dark:border-gray-800">
-        <div className="p-4 space-y-3">
+      <div className="max-h-[260px] overflow-y-auto">
+        <div className="px-5 py-4 space-y-3">
           {goals.length === 0 && (
             <p className="text-gray-400 text-sm text-center py-4">
               No goals yet. Tell First Mate what you want to accomplish!
@@ -342,13 +342,19 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
         </div>
       </div>
 
+      {/* Divider */}
+      <div className="flex-none border-t border-gray-100 dark:border-gray-800" />
+
       {/* 2. News section — 2 items visible */}
-      <div className="max-h-[200px] overflow-y-auto border-b border-gray-100 dark:border-gray-800 pt-2">
+      <div className="max-h-[240px] overflow-y-auto py-3">
         <NewsPanel maxItems={2} />
       </div>
 
+      {/* Divider */}
+      <div className="flex-none border-t border-gray-100 dark:border-gray-800" />
+
       {/* 3. Recommendations section — 2 items visible */}
-      <div className="flex-1 overflow-y-auto pt-2">
+      <div className="flex-1 overflow-y-auto py-3">
         <SuggestionsPanel maxItems={2} />
       </div>
     </aside>

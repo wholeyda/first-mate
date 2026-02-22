@@ -53,8 +53,8 @@ export function NewsPanel({ maxItems }: { maxItems?: number }) {
 
   if (isLoading && news.length === 0) {
     return (
-      <div className="px-4 pb-3">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+      <div className="px-5 pb-1">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
           Tips & Resources
         </h3>
         <div className="space-y-2">
@@ -77,7 +77,7 @@ export function NewsPanel({ maxItems }: { maxItems?: number }) {
 
   if (news.length === 0 && !isLoading) {
     return (
-      <div className="px-4 py-3">
+      <div className="px-5 py-3">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">Tips & Resources</h3>
         <p className="text-xs text-gray-400 dark:text-gray-500">No tips available yet.</p>
       </div>
@@ -87,8 +87,8 @@ export function NewsPanel({ maxItems }: { maxItems?: number }) {
   const displayNews = maxItems ? news.slice(0, maxItems) : news;
 
   return (
-    <div className="px-4 pb-3">
-      <div className="flex items-center justify-between mb-2">
+    <div className="px-5 pb-1">
+      <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Tips & Resources
         </h3>
@@ -101,7 +101,7 @@ export function NewsPanel({ maxItems }: { maxItems?: number }) {
           ↻
         </button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {displayNews.map((item, index) => (
           <div
             key={index}
