@@ -164,6 +164,9 @@ export function CalendarView() {
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
   const [showPending, setShowPending] = useState(false);
+  const [approving, setApproving] = useState<Set<string>>(new Set());
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasScrolled = useRef(false);
 
@@ -264,6 +267,8 @@ export function CalendarView() {
   }
 
   async function handleApproveBlock(blockId: string) {
+    setApproveError(null);
+    setApproving((prev) => new Set(prev).add(blockId));
     try {
       const modifications =
         editingBlock === blockId && editStart && editEnd
@@ -275,19 +280,30 @@ export function CalendarView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ blockIds: [blockId], modifications }),
       });
-      if (response.ok) {
+      const data = await response.json();
+      if (response.ok && data.approved > 0) {
         setPendingBlocks((prev) => prev.filter((b) => b.id !== blockId));
         setEditingBlock(null);
         setEditStart("");
         setEditEnd("");
         fetchAll();
+      } else {
+        setApproveError(data.error || data.errors?.join(", ") || "Failed to create calendar event");
       }
     } catch {
-      // Approve failed silently
+      setApproveError("Network error — could not approve block");
+    } finally {
+      setApproving((prev) => {
+        const next = new Set(prev);
+        next.delete(blockId);
+        return next;
+      });
     }
   }
 
   async function handleApproveAll() {
+    setApproveError(null);
+    setApprovingAll(true);
     try {
       const blockIds = pendingBlocks.map((b) => b.id);
       const response = await fetch("/api/calendar/events/approve", {
@@ -295,12 +311,22 @@ export function CalendarView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ blockIds }),
       });
+      const data = await response.json();
       if (response.ok) {
-        setPendingBlocks([]);
-        fetchAll();
+        if (data.approved > 0) {
+          setPendingBlocks([]);
+          fetchAll();
+        }
+        if (data.errors?.length > 0) {
+          setApproveError(`${data.approved} approved, ${data.errors.length} failed: ${data.errors[0]}`);
+        }
+      } else {
+        setApproveError(data.error || "Failed to approve events");
       }
     } catch {
-      // Approve all failed silently
+      setApproveError("Network error — could not approve blocks");
+    } finally {
+      setApprovingAll(false);
     }
   }
 
@@ -419,18 +445,27 @@ export function CalendarView() {
               <div className="flex gap-2">
                 <button
                   onClick={handleApproveAll}
-                  className="text-xs text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 px-2 py-1 rounded cursor-pointer font-medium transition-colors"
+                  disabled={approvingAll}
+                  className="text-xs text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 px-2 py-1 rounded cursor-pointer font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Approve All
+                  {approvingAll ? "Approving..." : "Approve All"}
                 </button>
                 <button
                   onClick={handleRejectAll}
-                  className="text-xs text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 px-2 py-1 rounded cursor-pointer transition-colors"
+                  disabled={approvingAll}
+                  className="text-xs text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 px-2 py-1 rounded cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Reject All
                 </button>
               </div>
             </div>
+
+            {/* Error message */}
+            {approveError && (
+              <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg">
+                <p className="text-xs text-red-700 dark:text-red-400">{approveError}</p>
+              </div>
+            )}
 
             <div className="space-y-3">
               {Object.entries(pendingByDay).map(([day, blocks]) => (
@@ -439,10 +474,11 @@ export function CalendarView() {
                   <div className="space-y-1.5">
                     {blocks.map((block) => {
                       const isEditing = editingBlock === block.id;
+                      const isApproving = approving.has(block.id) || approvingAll;
                       return (
                         <div
                           key={block.id}
-                          className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800/50"
+                          className={`flex items-center gap-3 bg-white dark:bg-gray-900 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800/50 ${isApproving ? "opacity-60" : ""}`}
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
@@ -472,10 +508,11 @@ export function CalendarView() {
                           <div className="flex items-center gap-1 flex-none">
                             <button
                               onClick={() => handleApproveBlock(block.id)}
-                              className="text-xs text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 px-2 py-1 rounded cursor-pointer font-medium transition-colors"
-                              title={isEditing ? "Approve with changes" : "Approve"}
+                              disabled={isApproving}
+                              className="text-xs text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 px-2 py-1 rounded cursor-pointer font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={isEditing ? "Approve with changes" : "Approve → creates Google Calendar event"}
                             >
-                              ✓
+                              {isApproving ? "..." : "✓"}
                             </button>
                             {!isEditing ? (
                               <button
