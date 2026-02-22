@@ -163,6 +163,12 @@ export async function createEvent(
       description,
       start: { dateTime: startTime, timeZone: "America/Los_Angeles" },
       end: { dateTime: endTime, timeZone: "America/Los_Angeles" },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: "popup", minutes: 10 },
+        ],
+      },
       extendedProperties: {
         private: {
           [APP_TAG_KEY]: APP_TAG_VALUE,
