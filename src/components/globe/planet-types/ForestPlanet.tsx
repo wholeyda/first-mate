@@ -19,7 +19,7 @@ interface Props {
 export function ForestPlanet({ colors }: Props) {
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#1E6B34"),
+      color: new THREE.Color(colors[0] || "#1E6B34").multiplyScalar(0.2),
       roughness: 0.85,
       metalness: 0.0,
       emissive: new THREE.Color(colors[1] || "#0D4F1C"),
@@ -34,6 +34,8 @@ export function ForestPlanet({ colors }: Props) {
       atmosphereOpacity={0.3}
       sparkleCount={20}
       sparkleColor="#BFFF00"
+      coronaColor="#90EE90"
+      glowColor="#1E6B34"
     />
   );
 }

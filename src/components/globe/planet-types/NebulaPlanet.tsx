@@ -22,11 +22,11 @@ export function NebulaPlanet({ colors }: Props) {
 
   const material = useMemo(() => {
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#9B59B6"),
+      color: new THREE.Color(colors[0] || "#9B59B6").multiplyScalar(0.2),
       roughness: 0.6,
       metalness: 0.0,
       emissive: new THREE.Color(colors[1] || "#6B2FA0"),
-      emissiveIntensity: 0.3,
+      emissiveIntensity: 0.2,
     });
     matRef.current = mat;
     return mat;
@@ -35,7 +35,7 @@ export function NebulaPlanet({ colors }: Props) {
   // Subtle color shift
   useFrame((state) => {
     if (matRef.current) {
-      const t = Math.sin(state.clock.elapsedTime * 0.5) * 0.15 + 0.3;
+      const t = Math.sin(state.clock.elapsedTime * 0.5) * 0.1 + 0.2;
       matRef.current.emissiveIntensity = t;
     }
   });
@@ -50,6 +50,9 @@ export function NebulaPlanet({ colors }: Props) {
       scale={1.15}
       hasRings
       ringColor={colors[2] || "#D4A5FF"}
+      coronaColor="#D63AEE"
+      glowColor="#9B59B6"
+      glowIntensity={1.1}
     />
   );
 }

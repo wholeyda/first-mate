@@ -19,7 +19,7 @@ interface Props {
 export function CoralPlanet({ colors }: Props) {
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#FF7F7F"),
+      color: new THREE.Color(colors[0] || "#FF7F7F").multiplyScalar(0.2),
       roughness: 0.75,
       metalness: 0.0,
       emissive: new THREE.Color(colors[1] || "#FF6B6B"),
@@ -35,6 +35,8 @@ export function CoralPlanet({ colors }: Props) {
       sparkleCount={20}
       sparkleColor="#FFB6C1"
       detail={24}
+      coronaColor="#FF6B6B"
+      glowColor="#FF7F7F"
     />
   );
 }

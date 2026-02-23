@@ -22,11 +22,11 @@ export function GardenPlanet({ colors }: Props) {
 
   const material = useMemo(() => {
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#4CAF50"),
+      color: new THREE.Color(colors[0] || "#4CAF50").multiplyScalar(0.2),
       roughness: 0.7,
       metalness: 0.0,
       emissive: new THREE.Color(colors[1] || "#FF69B4"),
-      emissiveIntensity: 0.2,
+      emissiveIntensity: 0.15,
     });
     matRef.current = mat;
     return mat;
@@ -35,7 +35,7 @@ export function GardenPlanet({ colors }: Props) {
   // Gentle emissive pulsing (flowers blooming)
   useFrame((state) => {
     if (matRef.current) {
-      const t = Math.sin(state.clock.elapsedTime * 2.0) * 0.1 + 0.2;
+      const t = Math.sin(state.clock.elapsedTime * 2.0) * 0.08 + 0.15;
       matRef.current.emissiveIntensity = t;
     }
   });
@@ -47,6 +47,8 @@ export function GardenPlanet({ colors }: Props) {
       atmosphereOpacity={0.2}
       sparkleCount={25}
       sparkleColor="#FFB6C1"
+      coronaColor="#FFD700"
+      glowColor="#FF69B4"
     />
   );
 }

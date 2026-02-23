@@ -73,6 +73,17 @@ export async function GET(request: NextRequest) {
     const warnings: string[] = [];
     const onTokenRefresh = makeTokenRefresher(supabase, user.id);
 
+    // Skip fetching if calendar IDs are not configured (just use email as fallback)
+    const hasPersonalCalendar = !!profile.personal_calendar_id;
+    const hasWorkCalendar = !!profile.work_calendar_id;
+
+    if (!hasPersonalCalendar) {
+      console.warn("Personal calendar ID not configured, using email as fallback:", profile.email);
+    }
+    if (!hasWorkCalendar) {
+      console.warn("Work calendar ID not configured, using email as fallback:", profile.email);
+    }
+
     const [personalResult, workResult] = await Promise.allSettled([
       fetchEvents(
         profile.google_access_token,
@@ -98,15 +109,24 @@ export async function GET(request: NextRequest) {
     if (personalResult.status === "fulfilled") {
       personalEvents = personalResult.value;
     } else {
-      console.error("Personal calendar fetch error:", personalResult.reason);
-      warnings.push("Could not load personal calendar events");
+      const reason = personalResult.reason;
+      const detail = reason?.message || reason?.code || String(reason);
+      console.error("Personal calendar fetch error:", detail);
+      warnings.push(`Could not load personal calendar events: ${detail}`);
     }
 
     if (workResult.status === "fulfilled") {
       workEvents = workResult.value;
     } else {
-      console.error("Work calendar fetch error:", workResult.reason);
-      warnings.push("Could not load work calendar events");
+      const reason = workResult.reason;
+      const detail = reason?.message || reason?.code || String(reason);
+      console.error("Work calendar fetch error:", detail);
+      warnings.push(`Could not load work calendar events: ${detail}`);
+    }
+
+    // If both personal and work point to the same calendar, deduplicate
+    if (personalId === workId && workResult.status === "fulfilled") {
+      workEvents = [];
     }
 
     return NextResponse.json({

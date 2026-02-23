@@ -23,11 +23,11 @@ export function SteampunkPlanet({ colors }: Props) {
 
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#B87333"),
+      color: new THREE.Color(colors[0] || "#B87333").multiplyScalar(0.2),
       roughness: 0.3,
       metalness: 0.85,
       emissive: new THREE.Color(colors[1] || "#8B6914"),
-      emissiveIntensity: 0.2,
+      emissiveIntensity: 0.15,
     });
   }, [colors]);
 
@@ -47,6 +47,8 @@ export function SteampunkPlanet({ colors }: Props) {
       sparkleColor="#FFD700"
       hasRings
       ringColor={colors[2] || "#B87333"}
+      coronaColor="#FFD700"
+      glowColor="#C8A882"
     >
       {/* Gear ring (toroidal) */}
       <mesh ref={gearRef} rotation={[Math.PI * 0.45, 0, 0]}>

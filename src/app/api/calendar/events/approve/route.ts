@@ -98,6 +98,18 @@ export async function POST(request: NextRequest) {
           : profile.personal_calendar_id || profile.email;
 
       try {
+        // Validate datetime strings before sending to Google
+        const parsedStart = new Date(startTime);
+        const parsedEnd = new Date(endTime);
+        if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+          errors.push(`Invalid time format for block ${blockId}`);
+          continue;
+        }
+        if (parsedEnd <= parsedStart) {
+          errors.push(`End time must be after start time for block ${blockId}`);
+          continue;
+        }
+
         // Create the Google Calendar event
         const event = await createEvent(
           profile.google_access_token,
@@ -122,9 +134,15 @@ export async function POST(request: NextRequest) {
           .eq("id", blockId);
 
         approved++;
-      } catch (err) {
-        console.error(`Failed to approve block ${blockId}:`, err);
-        errors.push(`Failed to create event for block ${blockId}`);
+      } catch (err: unknown) {
+        const error = err as { message?: string; code?: string; status?: number };
+        console.error(`Failed to approve block ${blockId}:`, {
+          message: error?.message,
+          code: error?.code,
+          status: error?.status,
+        });
+        const detail = error?.message || "Google Calendar API error";
+        errors.push(`Failed to create event for block ${blockId}: ${detail}`);
       }
     }
 
