@@ -5,17 +5,17 @@
  */
 
 // Scene scale: 1 unit ≈ 100px at default camera distance
-export const STAR_RADIUS = 3.6;
-export const PLANET_ORBIT_DISTANCE = 6.5; // Distance from center to planet orbit
-export const PLANET_RADIUS = 0.7; // Base planet radius (60-80px equivalent)
+export const STAR_RADIUS = 2.5; // Smaller star so planets orbit visibly outside the glow
+export const PLANET_ORBIT_DISTANCE = 7.0; // Well outside star glow (glow reaches ~4.5)
+export const PLANET_RADIUS = 0.5; // Visible planet size
 
 // Camera
 export const CAMERA_FOV = 45;
 export const CAMERA_NEAR = 0.1;
 export const CAMERA_FAR = 100;
-export const CAMERA_DISTANCE = 16; // Default distance from origin
+export const CAMERA_DISTANCE = 18; // Pulled back to see full orbits
 export const ZOOM_MIN_DISTANCE = 8; // Closest zoom
-export const ZOOM_MAX_DISTANCE = 28; // Farthest zoom
+export const ZOOM_MAX_DISTANCE = 32; // Farthest zoom
 
 // Rotation speeds (radians per second)
 export const IDLE_SPEED = 0.15;

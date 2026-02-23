@@ -5,21 +5,35 @@
  *   - Perspective camera + OrbitControls (zoom only)
  *   - Background starfield
  *   - CentralStar at origin
- *   - PlanetMesh for each island with orbit path lines
- *   - Global rotation + active/idle lerp via useFrame
+ *   - Orbiting planets with smooth animation
+ *   - Global rotation + active/idle lerp
  *   - Ambient + point light setup
  */
 
 "use client";
 
-import { useRef, Suspense } from "react";
+import { useRef, useState, useMemo, Suspense, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Stars, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { Island } from "@/types/database";
 import { CentralStar } from "./CentralStar";
-import { PlanetMesh } from "./PlanetMesh";
 import { getOrbitPathPoints } from "./hooks/useOrbitalMotion";
+import { IslandTypeName } from "./types";
+import {
+  VolcanicPlanet,
+  CrystallinePlanet,
+  NebulaPlanet,
+  DesertPlanet,
+  SteampunkPlanet,
+  ArcticPlanet,
+  TropicalPlanet,
+  ForestPlanet,
+  GardenPlanet,
+  CoralPlanet,
+  BioluminescentPlanet,
+  FloatingPlanet,
+} from "./planet-types";
 import {
   CAMERA_FOV,
   CAMERA_NEAR,
@@ -31,6 +45,8 @@ import {
   ACTIVE_SPEED,
   SPEED_LERP,
   SCENE_TILT,
+  PLANET_ORBIT_DISTANCE,
+  ORBIT_SPEED_MULT,
 } from "./constants";
 
 interface SceneProps {
@@ -39,11 +55,100 @@ interface SceneProps {
   onIslandClick?: (island: Island) => void;
 }
 
-/**
- * Inner scene component — must live inside <Canvas>
- */
+// ---- Planet type renderer (inline to avoid import cycle) ----
+function PlanetTypeRenderer({ type, colors }: { type: string; colors: string[] }) {
+  switch (type as IslandTypeName) {
+    case "volcanic": return <VolcanicPlanet colors={colors} />;
+    case "crystalline": return <CrystallinePlanet colors={colors} />;
+    case "nebula": return <NebulaPlanet colors={colors} />;
+    case "desert": return <DesertPlanet colors={colors} />;
+    case "steampunk": return <SteampunkPlanet colors={colors} />;
+    case "arctic": return <ArcticPlanet colors={colors} />;
+    case "tropical": return <TropicalPlanet colors={colors} />;
+    case "forest": return <ForestPlanet colors={colors} />;
+    case "garden": return <GardenPlanet colors={colors} />;
+    case "coral": return <CoralPlanet colors={colors} />;
+    case "bioluminescent": return <BioluminescentPlanet colors={colors} />;
+    case "floating": return <FloatingPlanet colors={colors} />;
+    default: return <TropicalPlanet colors={colors} />;
+  }
+}
+
+// ---- Orbiting planet — position updated every frame via useFrame ----
+function OrbitingPlanet({
+  island,
+  angleRef,
+  onClick,
+}: {
+  island: Island;
+  angleRef: React.MutableRefObject<number>;
+  onClick?: (island: Island) => void;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
+
+  const colors = island.color_palette || ["#4ECDC4", "#45B7D1", "#96CEB4"];
+  const typeName = island.island_type || "tropical";
+
+  // Update orbital position every frame
+  useFrame(() => {
+    if (!groupRef.current) return;
+    const orbitTheta = island.position_theta + angleRef.current * ORBIT_SPEED_MULT;
+    const phi = island.position_phi;
+    const x = Math.sin(phi) * Math.cos(orbitTheta) * PLANET_ORBIT_DISTANCE;
+    const y = Math.cos(phi) * PLANET_ORBIT_DISTANCE;
+    const z = Math.sin(phi) * Math.sin(orbitTheta) * PLANET_ORBIT_DISTANCE;
+    groupRef.current.position.set(x, y, z);
+  });
+
+  const handleClick = useCallback(
+    (e: THREE.Event) => {
+      (e as any).stopPropagation?.();
+      onClick?.(island);
+    },
+    [island, onClick]
+  );
+
+  return (
+    <group
+      ref={groupRef}
+      onClick={handleClick as any}
+      onPointerOver={(e: any) => {
+        e.stopPropagation();
+        setHovered(true);
+        document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={() => {
+        setHovered(false);
+        document.body.style.cursor = "auto";
+      }}
+      scale={hovered ? 1.15 : 1.0}
+    >
+      <PlanetTypeRenderer type={typeName} colors={colors} />
+    </group>
+  );
+}
+
+// ---- Central star bridge — passes ref intensity to CentralStar props ----
+function CentralStarAnimated({
+  activeIntensityRef,
+}: {
+  activeIntensityRef: React.MutableRefObject<number>;
+}) {
+  const [intensity, setIntensity] = useState(0);
+
+  useFrame(() => {
+    const current = activeIntensityRef.current;
+    if (Math.abs(current - intensity) > 0.02) {
+      setIntensity(current);
+    }
+  });
+
+  return <CentralStar activeIntensity={intensity} />;
+}
+
+// ---- Main scene (inside Canvas) ----
 function Scene({ isActive, islands, onIslandClick }: SceneProps) {
-  const sceneGroupRef = useRef<THREE.Group>(null);
   const angleRef = useRef(0);
   const speedRef = useRef(IDLE_SPEED);
   const activeIntensityRef = useRef(0);
@@ -56,37 +161,40 @@ function Scene({ isActive, islands, onIslandClick }: SceneProps) {
     speedRef.current += (targetSpeed - speedRef.current) * SPEED_LERP;
     angleRef.current += speedRef.current * dt;
 
-    // Lerp active intensity (0 = idle, 1 = fully active)
+    // Lerp active intensity
     const targetIntensity = isActive ? 1.0 : 0.0;
     activeIntensityRef.current +=
       (targetIntensity - activeIntensityRef.current) * SPEED_LERP;
   });
 
-  // Read current angle/intensity from refs in render (not in useFrame callback)
-  // We pass the ref values through a wrapper that reads them every frame
+  // Pre-compute orbit path points (static, don't change per frame)
+  const orbitPaths = useMemo(() => {
+    return islands.map((island) => ({
+      id: island.id,
+      points: getOrbitPathPoints(island.position_phi),
+    }));
+  }, [islands]);
+
   return (
-    <group ref={sceneGroupRef} rotation={[SCENE_TILT, 0, 0]}>
+    <group rotation={[SCENE_TILT, 0, 0]}>
       {/* Central star */}
-      <AnimatedCentralStar activeIntensityRef={activeIntensityRef} />
+      <CentralStarAnimated activeIntensityRef={activeIntensityRef} />
 
-      {/* Orbit paths */}
-      {islands.map((island) => {
-        const points = getOrbitPathPoints(island.position_phi);
-        return (
-          <Line
-            key={`orbit-${island.id}`}
-            points={points}
-            color="white"
-            lineWidth={0.5}
-            opacity={0.08}
-            transparent
-          />
-        );
-      })}
+      {/* Orbit path lines */}
+      {orbitPaths.map(({ id, points }) => (
+        <Line
+          key={`orbit-${id}`}
+          points={points}
+          color="white"
+          lineWidth={0.5}
+          opacity={0.08}
+          transparent
+        />
+      ))}
 
-      {/* Planets */}
+      {/* Orbiting planets */}
       {islands.map((island) => (
-        <AnimatedPlanet
+        <OrbitingPlanet
           key={island.id}
           island={island}
           angleRef={angleRef}
@@ -95,143 +203,14 @@ function Scene({ isActive, islands, onIslandClick }: SceneProps) {
       ))}
 
       {/* Lighting */}
-      <ambientLight intensity={0.3} />
-      <pointLight position={[0, 0, 0]} intensity={2} color="#66CCFF" distance={30} />
-      <pointLight position={[10, 5, 10]} intensity={0.5} color="#FFFFFF" />
+      <ambientLight intensity={0.4} />
+      <pointLight position={[0, 0, 0]} intensity={2.5} color="#88DDFF" distance={40} />
+      <pointLight position={[15, 8, 10]} intensity={0.8} color="#FFFFFF" />
     </group>
   );
 }
 
-/**
- * Wrapper that reads angleRef every frame to pass current value to PlanetMesh
- */
-function AnimatedPlanet({
-  island,
-  angleRef,
-  onClick,
-}: {
-  island: Island;
-  angleRef: React.MutableRefObject<number>;
-  onClick?: (island: Island) => void;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame(() => {
-    // Force re-render by updating position directly
-    if (groupRef.current) {
-      // Trigger React reconciliation by using key — but for performance,
-      // we update the child group's position directly
-    }
-  });
-
-  // We use a component that reads the ref in useFrame for smooth animation
-  return <PlanetMeshAnimated island={island} angleRef={angleRef} onClick={onClick} />;
-}
-
-/**
- * Reads angleRef in useFrame and updates group position directly
- */
-function PlanetMeshAnimated({
-  island,
-  angleRef,
-  onClick,
-}: {
-  island: Island;
-  angleRef: React.MutableRefObject<number>;
-  onClick?: (island: Island) => void;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame(() => {
-    if (!groupRef.current) return;
-    const [x, y, z] = computeOrbitPositionDirect(
-      island.position_theta,
-      island.position_phi,
-      angleRef.current
-    );
-    groupRef.current.position.set(x, y, z);
-  });
-
-  const colors = island.color_palette || ["#4ECDC4", "#45B7D1", "#96CEB4"];
-
-  return (
-    <group ref={groupRef}>
-      <PlanetMesh island={island} globalAngle={0} onClick={onClick} />
-    </group>
-  );
-}
-
-// Direct computation (avoiding hook overhead in useFrame)
-import { PLANET_ORBIT_DISTANCE, ORBIT_SPEED_MULT } from "./constants";
-
-function computeOrbitPositionDirect(
-  theta: number,
-  phi: number,
-  globalAngle: number
-): [number, number, number] {
-  const orbitTheta = theta + globalAngle * ORBIT_SPEED_MULT;
-  const x = Math.sin(phi) * Math.cos(orbitTheta) * PLANET_ORBIT_DISTANCE;
-  const y = Math.cos(phi) * PLANET_ORBIT_DISTANCE;
-  const z = Math.sin(phi) * Math.sin(orbitTheta) * PLANET_ORBIT_DISTANCE;
-  return [x, y, z];
-}
-
-/**
- * Reads activeIntensityRef in useFrame for smooth animation
- */
-function AnimatedCentralStar({
-  activeIntensityRef,
-}: {
-  activeIntensityRef: React.MutableRefObject<number>;
-}) {
-  // We need to pass a value to CentralStar that updates every frame.
-  // Since CentralStar uses its own useFrame, we can pass the ref directly
-  // and have CentralStar read it. But CentralStar takes a number prop.
-  // Solution: thin wrapper that reads ref and forces re-render via useFrame.
-  const intensityRef = useRef(0);
-
-  useFrame(() => {
-    intensityRef.current = activeIntensityRef.current;
-  });
-
-  // CentralStar uses its own useFrame to read uniforms, so passing ref value
-  // at the last render is fine — it won't be perfectly frame-synced but close enough.
-  // The CentralStar's own useFrame reads activeIntensity from its prop.
-  return <CentralStarBridge activeIntensityRef={activeIntensityRef} />;
-}
-
-/**
- * Bridge component that passes ref value to CentralStar
- * using a state update throttled to avoid excessive re-renders.
- */
-import { useState, useEffect } from "react";
-
-function CentralStarBridge({
-  activeIntensityRef,
-}: {
-  activeIntensityRef: React.MutableRefObject<number>;
-}) {
-  // Read ref value and pass to CentralStar
-  // CentralStar's shaders do the heavy lifting via uniforms,
-  // so we just need a rough activeIntensity value (not frame-perfect)
-  const [intensity, setIntensity] = useState(0);
-
-  useFrame(() => {
-    // Only update React state every ~100ms to avoid perf hit
-    const current = activeIntensityRef.current;
-    if (Math.abs(current - intensity) > 0.05) {
-      setIntensity(current);
-    }
-  });
-
-  return <CentralStar activeIntensity={intensity} />;
-}
-
-/**
- * Globe3DCanvas — the exported component
- *
- * Wraps everything in a Canvas with camera config and controls.
- */
+// ---- Exported Canvas wrapper ----
 export function Globe3DCanvas({ isActive, islands, onIslandClick }: SceneProps) {
   return (
     <div className="w-[900px] h-[900px]">
@@ -240,7 +219,7 @@ export function Globe3DCanvas({ isActive, islands, onIslandClick }: SceneProps) 
           fov: CAMERA_FOV,
           near: CAMERA_NEAR,
           far: CAMERA_FAR,
-          position: [0, 2, CAMERA_DISTANCE],
+          position: [0, 3, CAMERA_DISTANCE],
         }}
         dpr={[1, 2]}
         style={{ background: "transparent" }}
