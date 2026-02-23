@@ -9,12 +9,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Island type presets — each has a distinct visual identity
-const ISLAND_TYPES = [
-  "tropical", "volcanic", "crystalline", "floating",
-  "bioluminescent", "coral", "arctic", "desert",
-  "forest", "steampunk", "nebula", "garden",
+// Work-oriented planet types (techy/industrial feel)
+const WORK_TYPES = [
+  "steampunk", "crystalline", "nebula", "desert", "volcanic", "arctic",
 ];
+
+// Personal-oriented planet types (organic/natural feel)
+const PERSONAL_TYPES = [
+  "tropical", "forest", "garden", "coral", "bioluminescent", "floating",
+];
+
+// Combined for fallback
+const ALL_TYPES = [...WORK_TYPES, ...PERSONAL_TYPES];
 
 // Color palette presets — vivid and on-brand
 const COLOR_PALETTES = [
@@ -75,8 +81,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate random island properties
-    const island_type = ISLAND_TYPES[Math.floor(Math.random() * ISLAND_TYPES.length)];
+    // Look up the goal to determine work vs personal type pool
+    let typePool = ALL_TYPES;
+    const { data: goal } = await supabase
+      .from("goals")
+      .select("is_work")
+      .eq("id", goal_id)
+      .single();
+
+    if (goal) {
+      typePool = goal.is_work ? WORK_TYPES : PERSONAL_TYPES;
+    }
+
+    // Generate random island properties from the appropriate pool
+    const island_type = typePool[Math.floor(Math.random() * typePool.length)];
     const color_palette = COLOR_PALETTES[Math.floor(Math.random() * COLOR_PALETTES.length)];
     // Random position on the sphere surface
     const position_theta = Math.random() * Math.PI * 2; // 0 to 2pi
