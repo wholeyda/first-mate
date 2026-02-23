@@ -17,6 +17,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Stars, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { Island } from "@/types/database";
+import { StarConfig } from "@/types/star-config";
 import { CentralStar } from "./CentralStar";
 import { getOrbitPathPoints } from "./hooks/useOrbitalMotion";
 import { IslandTypeName } from "./types";
@@ -53,6 +54,8 @@ interface SceneProps {
   isActive: boolean;
   islands: Island[];
   onIslandClick?: (island: Island) => void;
+  starConfig?: StarConfig;
+  onStarClick?: () => void;
 }
 
 // ---- Planet type renderer (inline to avoid import cycle) ----
@@ -129,11 +132,15 @@ function OrbitingPlanet({
   );
 }
 
-// ---- Central star bridge — passes ref intensity to CentralStar props ----
+// ---- Central star bridge — passes ref intensity + config to CentralStar ----
 function CentralStarAnimated({
   activeIntensityRef,
+  starConfig,
+  onStarClick,
 }: {
   activeIntensityRef: React.MutableRefObject<number>;
+  starConfig?: StarConfig;
+  onStarClick?: () => void;
 }) {
   const [intensity, setIntensity] = useState(0);
 
@@ -144,11 +151,17 @@ function CentralStarAnimated({
     }
   });
 
-  return <CentralStar activeIntensity={intensity} />;
+  return (
+    <CentralStar
+      activeIntensity={intensity}
+      config={starConfig}
+      onStarClick={onStarClick}
+    />
+  );
 }
 
 // ---- Main scene (inside Canvas) ----
-function Scene({ isActive, islands, onIslandClick }: SceneProps) {
+function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick }: SceneProps) {
   const angleRef = useRef(0);
   const speedRef = useRef(IDLE_SPEED);
   const activeIntensityRef = useRef(0);
@@ -178,7 +191,11 @@ function Scene({ isActive, islands, onIslandClick }: SceneProps) {
   return (
     <group rotation={[SCENE_TILT, 0, 0]}>
       {/* Central star */}
-      <CentralStarAnimated activeIntensityRef={activeIntensityRef} />
+      <CentralStarAnimated
+        activeIntensityRef={activeIntensityRef}
+        starConfig={starConfig}
+        onStarClick={onStarClick}
+      />
 
       {/* Orbit path lines */}
       {orbitPaths.map(({ id, points }) => (
@@ -211,7 +228,7 @@ function Scene({ isActive, islands, onIslandClick }: SceneProps) {
 }
 
 // ---- Exported Canvas wrapper ----
-export function Globe3DCanvas({ isActive, islands, onIslandClick }: SceneProps) {
+export function Globe3DCanvas({ isActive, islands, onIslandClick, starConfig, onStarClick }: SceneProps) {
   return (
     <div className="w-[900px] h-[900px]">
       <Canvas
@@ -242,6 +259,8 @@ export function Globe3DCanvas({ isActive, islands, onIslandClick }: SceneProps) 
             isActive={isActive}
             islands={islands}
             onIslandClick={onIslandClick}
+            starConfig={starConfig}
+            onStarClick={onStarClick}
           />
 
           {/* Camera controls: zoom only */}

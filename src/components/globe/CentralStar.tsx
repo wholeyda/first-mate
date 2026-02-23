@@ -1,13 +1,11 @@
 /**
  * CentralStar
  *
- * A beautiful glowing central star with:
- *   - Smooth animated surface color (cyan/teal → purple gradient via noise)
- *   - Very subtle vertex displacement (organic, not lumpy)
- *   - Soft multi-layer glow (fresnel rim + additive outer halos)
- *   - Active state: colors shift faster, glow intensifies
+ * Customizable shader-driven central star. Colors and style parameters
+ * are passed via config prop and applied as shader uniforms for
+ * real-time preview without material recreation.
  *
- * Designed to feel like a living, breathing star — not a rocky moon.
+ * Click the star to open the customization panel.
  */
 
 "use client";
@@ -21,8 +19,9 @@ import {
   ACTIVE_GLOW_MIN,
   ACTIVE_GLOW_MAX,
 } from "./constants";
+import { StarConfig, DEFAULT_STAR_CONFIG } from "@/types/star-config";
 
-// ---- Simplex 3D noise for smooth animated surface ----
+// ---- Simplex 3D noise ----
 const NOISE_GLSL = /* glsl */ `
 vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
 vec4 mod289(vec4 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
@@ -73,12 +72,13 @@ float snoise(vec3 v){
 }
 `;
 
-// ---- Star surface shader ----
-// Smooth sphere with animated color swirls, minimal displacement
+// ---- Star surface vertex shader (with displacement uniform) ----
 const starVertexShader = /* glsl */ `
 ${NOISE_GLSL}
 uniform float uTime;
 uniform float uActiveIntensity;
+uniform float uAnimSpeed;
+uniform float uDisplacementStrength;
 varying vec3 vNormal;
 varying vec3 vPosition;
 varying float vNoise;
@@ -87,59 +87,51 @@ void main() {
   vNormal = normalize(normalMatrix * normal);
   vPosition = position;
 
-  // Very subtle organic displacement — gentle breathing, not lumpy
-  float speed = 0.15 + uActiveIntensity * 0.3;
+  float speed = (0.15 + uActiveIntensity * 0.3) * uAnimSpeed;
   float n = snoise(position * 0.8 + uTime * speed);
   vNoise = n;
 
-  // Tiny displacement so it stays round but feels alive
-  float strength = 0.03 + uActiveIntensity * 0.02;
+  float strength = uDisplacementStrength + uActiveIntensity * 0.02;
   vec3 displaced = position + normal * n * strength;
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
 }
 `;
 
+// ---- Star surface fragment shader (with color uniforms) ----
 const starFragmentShader = /* glsl */ `
 ${NOISE_GLSL}
 uniform float uTime;
 uniform float uActiveIntensity;
+uniform float uAnimSpeed;
+uniform float uHotspotIntensity;
+uniform vec3 uColorPrimary;
+uniform vec3 uColorSecondary;
+uniform vec3 uColorTertiary;
 varying vec3 vNormal;
 varying vec3 vPosition;
 varying float vNoise;
 
 void main() {
-  // Animated noise for color variation
-  float speed = 0.12 + uActiveIntensity * 0.25;
+  float speed = (0.12 + uActiveIntensity * 0.25) * uAnimSpeed;
   float n1 = snoise(vPosition * 1.2 + uTime * speed);
   float n2 = snoise(vPosition * 2.5 + uTime * speed * 0.7 + 100.0);
 
-  // Combine noise layers for rich variation
   float t = smoothstep(-0.3, 0.5, n1 * 0.7 + n2 * 0.3);
 
-  // Beautiful color palette: teal → cyan → soft purple
-  vec3 teal    = vec3(0.05, 0.75, 0.78);
-  vec3 cyan    = vec3(0.15, 0.85, 0.95);
-  vec3 lavender = vec3(0.55, 0.45, 0.85);
-  vec3 white   = vec3(1.0, 1.0, 1.0);
-
-  // Two-stage color ramp for richness
   vec3 color;
   if (t < 0.5) {
-    color = mix(teal, cyan, t * 2.0);
+    color = mix(uColorPrimary, uColorSecondary, t * 2.0);
   } else {
-    color = mix(cyan, lavender, (t - 0.5) * 2.0);
+    color = mix(uColorSecondary, uColorTertiary, (t - 0.5) * 2.0);
   }
 
-  // Bright hot spots at noise peaks — gives it that stellar energy look
   float hotspot = smoothstep(0.4, 0.75, n1);
-  color = mix(color, white, hotspot * 0.35);
+  color = mix(color, vec3(1.0), hotspot * uHotspotIntensity);
 
-  // Overall brightness: always emissive, brighter when active
   float brightness = 0.75 + uActiveIntensity * 0.25;
   color *= brightness;
 
-  // Slight darkening toward edges for depth (pseudo-limb-darkening)
   vec3 viewDir = normalize(cameraPosition - vPosition);
   float rim = dot(normalize(vNormal), viewDir);
   rim = smoothstep(0.0, 0.5, rim);
@@ -149,7 +141,7 @@ void main() {
 }
 `;
 
-// ---- Fresnel corona shader ----
+// ---- Corona fragment shader (with color uniforms) ----
 const coronaVertexShader = /* glsl */ `
 varying vec3 vNormal;
 varying vec3 vWorldPos;
@@ -162,7 +154,8 @@ void main() {
 
 const coronaFragmentShader = /* glsl */ `
 uniform float uIntensity;
-uniform float uTime;
+uniform vec3 uCoronaInner;
+uniform vec3 uCoronaOuter;
 varying vec3 vNormal;
 varying vec3 vWorldPos;
 
@@ -171,11 +164,7 @@ void main() {
   float fresnel = 1.0 - dot(viewDir, vNormal);
   fresnel = pow(fresnel, 2.0);
 
-  // Soft teal-cyan corona color
-  vec3 innerColor = vec3(0.1, 0.8, 0.9);
-  vec3 outerColor = vec3(0.4, 0.3, 0.8);
-  vec3 color = mix(innerColor, outerColor, fresnel);
-
+  vec3 color = mix(uCoronaInner, uCoronaOuter, fresnel);
   float alpha = fresnel * uIntensity * 0.6;
 
   gl_FragColor = vec4(color, alpha);
@@ -184,15 +173,23 @@ void main() {
 
 interface CentralStarProps {
   activeIntensity: number;
+  config?: StarConfig;
+  onStarClick?: () => void;
 }
 
-export function CentralStar({ activeIntensity }: CentralStarProps) {
+export function CentralStar({
+  activeIntensity,
+  config,
+  onStarClick,
+}: CentralStarProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const coronaRef = useRef<THREE.Mesh>(null);
   const glow1Ref = useRef<THREE.Mesh>(null);
   const glow2Ref = useRef<THREE.Mesh>(null);
 
-  // Star surface shader
+  const cfg = config ?? DEFAULT_STAR_CONFIG;
+
+  // Star surface shader material
   const starMaterial = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -201,12 +198,19 @@ export function CentralStar({ activeIntensity }: CentralStarProps) {
         uniforms: {
           uTime: { value: 0 },
           uActiveIntensity: { value: 0 },
+          uAnimSpeed: { value: cfg.style.animationSpeed },
+          uDisplacementStrength: { value: cfg.style.displacementStrength },
+          uHotspotIntensity: { value: cfg.style.hotspotIntensity },
+          uColorPrimary: { value: new THREE.Color(cfg.colorTheme.primary) },
+          uColorSecondary: { value: new THREE.Color(cfg.colorTheme.secondary) },
+          uColorTertiary: { value: new THREE.Color(cfg.colorTheme.tertiary) },
         },
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
-  // Fresnel corona shader
+  // Corona shader material
   const coronaMaterial = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -214,54 +218,67 @@ export function CentralStar({ activeIntensity }: CentralStarProps) {
         fragmentShader: coronaFragmentShader,
         uniforms: {
           uIntensity: { value: IDLE_GLOW_INTENSITY },
-          uTime: { value: 0 },
+          uCoronaInner: { value: new THREE.Color(cfg.colorTheme.coronaInner) },
+          uCoronaOuter: { value: new THREE.Color(cfg.colorTheme.coronaOuter) },
         },
         transparent: true,
         side: THREE.BackSide,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
-  // Inner glow halo (close, bright)
+  // Inner glow halo
   const innerGlowMaterial = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
-        color: new THREE.Color(0.05, 0.55, 0.7),
+        color: new THREE.Color(cfg.colorTheme.innerGlow),
         transparent: true,
         opacity: 0.12,
         side: THREE.BackSide,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
-  // Outer glow halo (far, subtle)
+  // Outer glow halo
   const outerGlowMaterial = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
-        color: new THREE.Color(0.15, 0.35, 0.6),
+        color: new THREE.Color(cfg.colorTheme.outerGlow),
         transparent: true,
         opacity: 0.06,
         side: THREE.BackSide,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.1);
+    const glowMult = cfg.style.glowIntensity;
 
-    // Advance time
+    // Live-update uniforms from config (no material recreation)
     starMaterial.uniforms.uTime.value += dt;
     starMaterial.uniforms.uActiveIntensity.value = activeIntensity;
-    coronaMaterial.uniforms.uTime.value = starMaterial.uniforms.uTime.value;
+    starMaterial.uniforms.uAnimSpeed.value = cfg.style.animationSpeed;
+    starMaterial.uniforms.uDisplacementStrength.value = cfg.style.displacementStrength;
+    starMaterial.uniforms.uHotspotIntensity.value = cfg.style.hotspotIntensity;
+    starMaterial.uniforms.uColorPrimary.value.set(cfg.colorTheme.primary);
+    starMaterial.uniforms.uColorSecondary.value.set(cfg.colorTheme.secondary);
+    starMaterial.uniforms.uColorTertiary.value.set(cfg.colorTheme.tertiary);
 
-    // Corona intensity
+    // Corona uniforms
     const time = starMaterial.uniforms.uTime.value;
+    coronaMaterial.uniforms.uCoronaInner.value.set(cfg.colorTheme.coronaInner);
+    coronaMaterial.uniforms.uCoronaOuter.value.set(cfg.colorTheme.coronaOuter);
+
     const glowTarget =
       activeIntensity > 0.1
         ? ACTIVE_GLOW_MIN +
@@ -269,18 +286,20 @@ export function CentralStar({ activeIntensity }: CentralStarProps) {
             (ACTIVE_GLOW_MAX - ACTIVE_GLOW_MIN) *
             activeIntensity
         : IDLE_GLOW_INTENSITY;
-    coronaMaterial.uniforms.uIntensity.value = glowTarget;
+    coronaMaterial.uniforms.uIntensity.value = glowTarget * glowMult;
 
-    // Pulse glow halos
+    // Glow halos — live color + opacity updates
     if (glow1Ref.current) {
       const mat = glow1Ref.current.material as THREE.MeshBasicMaterial;
+      mat.color.set(cfg.colorTheme.innerGlow);
       const pulse = Math.sin(time * 1.5) * 0.03;
-      mat.opacity = 0.12 + activeIntensity * 0.08 + pulse;
+      mat.opacity = (0.12 + activeIntensity * 0.08 + pulse) * glowMult;
     }
     if (glow2Ref.current) {
       const mat = glow2Ref.current.material as THREE.MeshBasicMaterial;
+      mat.color.set(cfg.colorTheme.outerGlow);
       const pulse = Math.sin(time * 1.0 + 1.0) * 0.015;
-      mat.opacity = 0.06 + activeIntensity * 0.04 + pulse;
+      mat.opacity = (0.06 + activeIntensity * 0.04 + pulse) * glowMult;
     }
 
     // Slow rotation
@@ -291,12 +310,26 @@ export function CentralStar({ activeIntensity }: CentralStarProps) {
 
   return (
     <group>
-      {/* Core star surface — high-poly sphere for smoothness */}
-      <mesh ref={meshRef} material={starMaterial}>
+      {/* Core star surface — clickable */}
+      <mesh
+        ref={meshRef}
+        material={starMaterial}
+        onClick={(e) => {
+          e.stopPropagation();
+          onStarClick?.();
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          if (onStarClick) document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = "auto";
+        }}
+      >
         <sphereGeometry args={[STAR_RADIUS, 128, 64]} />
       </mesh>
 
-      {/* Fresnel corona — just outside the surface */}
+      {/* Fresnel corona */}
       <mesh ref={coronaRef} material={coronaMaterial}>
         <sphereGeometry args={[STAR_RADIUS * 1.08, 64, 32]} />
       </mesh>

@@ -14,6 +14,7 @@ import { parseGoalsFromResponse, stripGoalJson, ParsedGoal } from "@/lib/parse-g
 import { Globe } from "@/components/globe";
 import { PlanetRemoveModal } from "@/components/planet-remove-modal";
 import { Island } from "@/types/database";
+import { StarConfig } from "@/types/star-config";
 
 interface Message {
   role: "user" | "assistant";
@@ -32,6 +33,8 @@ interface ChatProps {
   islands?: Island[];
   onIslandRemoved?: (islandId: string) => void;
   onHistoryCleared?: () => void;
+  starConfig?: StarConfig;
+  onStarClick?: () => void;
 }
 
 /**
@@ -88,7 +91,7 @@ function detectQuickReplies(text: string): string[] {
   return [];
 }
 
-export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared }: ChatProps) {
+export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared, starConfig, onStarClick }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -366,6 +369,8 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
             isActive={isLoading}
             islands={islands}
             onIslandClick={handlePlanetClick}
+            starConfig={starConfig}
+            onStarClick={onStarClick}
           />
         </div>
 

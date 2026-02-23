@@ -5,6 +5,8 @@
  * These ensure type safety when reading/writing to the database.
  */
 
+import { StarConfig } from "./star-config";
+
 export interface User {
   id: string;
   email: string;
@@ -15,6 +17,7 @@ export interface User {
   spotify_access_token: string | null;
   spotify_refresh_token: string | null;
   spotify_token_expires_at: string | null;
+  star_preferences: StarConfig | null;
   created_at: string;
 }
 

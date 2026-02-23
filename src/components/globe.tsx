@@ -16,11 +16,14 @@
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { Island } from "@/types/database";
+import { StarConfig } from "@/types/star-config";
 
 interface GlobeProps {
   isActive: boolean;
   islands?: Island[];
   onIslandClick?: (island: Island) => void;
+  starConfig?: StarConfig;
+  onStarClick?: () => void;
 }
 
 const Globe3DCanvas = dynamic(
@@ -28,7 +31,7 @@ const Globe3DCanvas = dynamic(
   { ssr: false }
 );
 
-export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
+export function Globe({ isActive, islands = [], onIslandClick, starConfig, onStarClick }: GlobeProps) {
   return (
     <div className="flex justify-center items-center">
       <Suspense
@@ -42,6 +45,8 @@ export function Globe({ isActive, islands = [], onIslandClick }: GlobeProps) {
           isActive={isActive}
           islands={islands}
           onIslandClick={onIslandClick}
+          starConfig={starConfig}
+          onStarClick={onStarClick}
         />
       </Suspense>
     </div>

@@ -14,8 +14,10 @@ import { CalendarView } from "@/components/calendar-view";
 import { ResumePanel } from "@/components/resume-panel";
 import { AeiouModal } from "@/components/aeiou-modal";
 import { IslandReveal } from "@/components/island-reveal";
+import { StarCustomizationPanel } from "@/components/star-customization-panel";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { Goal, Island } from "@/types/database";
+import { StarConfig, DEFAULT_STAR_CONFIG } from "@/types/star-config";
 import {
   requestNotificationPermission,
   registerServiceWorker,
@@ -40,6 +42,11 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [localCompletedCount, setLocalCompletedCount] = useState(completedGoalCount);
+
+  // Star customization state
+  const [starConfig, setStarConfig] = useState<StarConfig>(DEFAULT_STAR_CONFIG);
+  const [savedStarConfig, setSavedStarConfig] = useState<StarConfig>(DEFAULT_STAR_CONFIG);
+  const [isCustomizingStar, setIsCustomizingStar] = useState(false);
 
   // Initialize notifications on mount
   useEffect(() => {
@@ -68,6 +75,55 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
     }
     fetchIslands();
   }, []);
+
+  // Fetch star preferences on mount
+  useEffect(() => {
+    async function fetchStarPreferences() {
+      try {
+        const res = await fetch("/api/star-preferences");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.starPreferences) {
+            setStarConfig(data.starPreferences);
+            setSavedStarConfig(data.starPreferences);
+          }
+        }
+      } catch {
+        // Silent fail — defaults will be used
+      }
+    }
+    fetchStarPreferences();
+  }, []);
+
+  // Star customization handlers
+  function handleStarClick() {
+    setIsCustomizingStar(true);
+  }
+
+  function handleStarConfigChange(config: StarConfig) {
+    setStarConfig(config); // Live preview
+  }
+
+  async function handleStarSave() {
+    try {
+      const res = await fetch("/api/star-preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ starPreferences: starConfig }),
+      });
+      if (res.ok) {
+        setSavedStarConfig(starConfig);
+      }
+    } catch {
+      // Silent fail
+    }
+    setIsCustomizingStar(false);
+  }
+
+  function handleStarCancel() {
+    setStarConfig(savedStarConfig); // Revert to last saved
+    setIsCustomizingStar(false);
+  }
 
   function handleGoalCreated(parsedGoal: ParsedGoal, savedGoal?: Record<string, unknown>) {
     const newGoal: Goal = {
@@ -201,7 +257,7 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         {/* Tab content */}
         <div className="flex-1 overflow-hidden">
           {activeTab === "chat" && (
-            <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} onHistoryCleared={handleHistoryCleared} />
+            <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} onHistoryCleared={handleHistoryCleared} starConfig={starConfig} onStarClick={handleStarClick} />
           )}
           {activeTab === "calendar" && <CalendarView />}
           {activeTab === "resume" && <ResumePanel />}
@@ -236,6 +292,15 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
           onClose={() => setRevealIsland(null)}
         />
       )}
+
+      {/* Star Customization Panel */}
+      <StarCustomizationPanel
+        isOpen={isCustomizingStar}
+        currentConfig={starConfig}
+        onConfigChange={handleStarConfigChange}
+        onSave={handleStarSave}
+        onCancel={handleStarCancel}
+      />
 
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (

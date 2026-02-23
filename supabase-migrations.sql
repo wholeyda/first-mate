@@ -48,3 +48,7 @@ CREATE POLICY "Users can delete their own sub_goals" ON sub_goals
 CREATE INDEX IF NOT EXISTS idx_sub_goals_parent ON sub_goals(parent_goal_id);
 CREATE INDEX IF NOT EXISTS idx_sub_goals_user ON sub_goals(user_id);
 CREATE INDEX IF NOT EXISTS idx_scheduled_blocks_status ON scheduled_blocks(status);
+
+-- 7. Add star_preferences JSONB column to users table (for star customization)
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS star_preferences JSONB DEFAULT NULL;
