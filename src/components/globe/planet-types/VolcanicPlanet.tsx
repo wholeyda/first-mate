@@ -31,8 +31,6 @@ export function VolcanicPlanet({ colors }: Props) {
       accentColor="#FF8800"
       atmosphereTint="#FF4500"
       glowIntensity={glowRef.current}
-      sparkleCount={40}
-      sparkleColor="#FF6B00"
       detail={48}
     >
       {/* Small gray moon */}

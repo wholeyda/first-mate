@@ -23,8 +23,6 @@ export function TropicalPlanet({ colors }: Props) {
       accentColor="#87CEEB"
       atmosphereTint="#87CEEB"
       glowIntensity={0.8}
-      sparkleCount={10}
-      sparkleColor="#FFFFFF"
     >
       {/* Cloud wisps */}
       <mesh>

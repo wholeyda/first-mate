@@ -30,8 +30,6 @@ export function GardenPlanet({ colors }: Props) {
       accentColor="#FFD700"
       atmosphereTint="#FFD700"
       glowIntensity={glowRef.current}
-      sparkleCount={25}
-      sparkleColor="#FFB6C1"
     />
   );
 }

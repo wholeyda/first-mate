@@ -3,7 +3,7 @@
  *
  * Glass sphere planet with animated internal swirling colors,
  * subsurface scattering, FrontSide atmosphere rim, optional
- * accretion disk ring, sparkles, and self-spin animation.
+ * accretion disk ring, and self-spin animation.
  *
  * Each planet type passes 3 colors + config to customize the look.
  */
@@ -12,7 +12,6 @@
 
 import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import { PLANET_RADIUS, PLANET_SPIN_SPEED } from "../constants";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "../shaders/glassSphere.glsl";
@@ -30,10 +29,6 @@ export interface BasePlanetProps {
   atmosphereTint: string;
   /** Bloom multiplier (default 1.0) */
   glowIntensity?: number;
-  /** Sparkle count */
-  sparkleCount: number;
-  /** Sparkle color (hex) */
-  sparkleColor: string;
   /** Use icosahedron geometry for low-poly look */
   lowPoly?: boolean;
   /** Geometry detail level */
@@ -60,8 +55,6 @@ export function BasePlanet({
   accentColor,
   atmosphereTint,
   glowIntensity = 1.0,
-  sparkleCount,
-  sparkleColor,
   lowPoly = false,
   detail = 32,
   scale = 1,
@@ -188,17 +181,6 @@ export function BasePlanet({
         >
           <ringGeometry args={[radius * 1.5, radius * 3.5, 128, 1]} />
         </mesh>
-      )}
-
-      {/* Ambient sparkles */}
-      {sparkleCount > 0 && (
-        <Sparkles
-          count={sparkleCount}
-          scale={radius * 3.5}
-          size={3}
-          speed={0.4}
-          color={sparkleColor}
-        />
       )}
 
       {/* Type-specific extras (moons, shards, gears, etc.) */}

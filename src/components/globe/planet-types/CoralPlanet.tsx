@@ -21,8 +21,6 @@ export function CoralPlanet({ colors }: Props) {
       accentColor="#FFB6C1"
       atmosphereTint="#FF7F7F"
       glowIntensity={1.0}
-      sparkleCount={20}
-      sparkleColor="#FFB6C1"
     />
   );
 }

@@ -45,8 +45,6 @@ export function CrystallinePlanet({ colors }: Props) {
       accentColor="#FFFFFF"
       atmosphereTint="#E0E0FF"
       glowIntensity={1.0}
-      sparkleCount={30}
-      sparkleColor="#FFFFFF"
       lowPoly
       detail={2}
     >

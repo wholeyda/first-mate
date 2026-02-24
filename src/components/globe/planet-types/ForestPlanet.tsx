@@ -21,8 +21,6 @@ export function ForestPlanet({ colors }: Props) {
       accentColor="#BFFF00"
       atmosphereTint="#90EE90"
       glowIntensity={0.8}
-      sparkleCount={20}
-      sparkleColor="#BFFF00"
     />
   );
 }

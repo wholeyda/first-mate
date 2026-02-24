@@ -3,14 +3,13 @@
  *
  * 5-7 fragmented glass chunks floating in formation with <Float> bobbing.
  * Each chunk uses the glass sphere shader for consistent look.
- * Sparkles bridge the gaps between chunks.
  */
 
 "use client";
 
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Float, Sparkles } from "@react-three/drei";
+import { Float } from "@react-three/drei";
 import * as THREE from "three";
 import { PLANET_RADIUS } from "../constants";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "../shaders/glassSphere.glsl";
@@ -87,14 +86,6 @@ export function FloatingPlanet({ colors }: Props) {
         );
       })}
 
-      {/* Energy sparkles bridging chunks */}
-      <Sparkles
-        count={30}
-        scale={PLANET_RADIUS * 3}
-        size={3}
-        speed={0.6}
-        color={colors[2] || "#CE93D8"}
-      />
     </group>
   );
 }

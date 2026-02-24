@@ -40,3 +40,9 @@ export const ORBIT_SPEED_MULT = 0.4;
 
 // Planet self-spin speed (radians per second)
 export const PLANET_SPIN_SPEED = 0.3;
+
+// Rocket ships flying between planets
+export const ROCKET_COUNT = 4;
+export const ROCKET_SCALE = PLANET_RADIUS * 0.15;
+export const ROCKET_SPEED = 2.5;
+export const ROCKET_ARC_HEIGHT = 1.5;

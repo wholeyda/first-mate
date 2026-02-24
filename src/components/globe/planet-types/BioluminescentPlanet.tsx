@@ -30,8 +30,6 @@ export function BioluminescentPlanet({ colors }: Props) {
       accentColor="#00FF88"
       atmosphereTint="#00FFFF"
       glowIntensity={glowRef.current}
-      sparkleCount={30}
-      sparkleColor="#00FF88"
     />
   );
 }

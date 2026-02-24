@@ -30,8 +30,6 @@ export function NebulaPlanet({ colors }: Props) {
       accentColor={colors[2] || "#D4A5FF"}
       atmosphereTint="#9B59B6"
       glowIntensity={glowRef.current}
-      sparkleCount={20}
-      sparkleColor="#D4A5FF"
       scale={1.15}
       hasRings
       ringColor={colors[0] || "#9B59B6"}

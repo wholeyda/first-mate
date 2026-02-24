@@ -20,6 +20,7 @@ import * as THREE from "three";
 import { Island } from "@/types/database";
 import { StarConfig } from "@/types/star-config";
 import { CentralStar } from "./CentralStar";
+import { RocketFleet } from "./RocketShip";
 import { getOrbitPathPoints } from "./hooks/useOrbitalMotion";
 import { IslandTypeName } from "./types";
 import {
@@ -219,6 +220,11 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick }: Sc
           onClick={onIslandClick}
         />
       ))}
+
+      {/* Rocket ships flying between planets */}
+      {islands.length >= 2 && (
+        <RocketFleet islands={islands} angleRef={angleRef} />
+      )}
 
       {/* Lighting — directional + ambient (no point light at origin, hero self-illuminates) */}
       <ambientLight intensity={0.25} />

@@ -15,7 +15,6 @@
 
 import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import {
   HERO_PLANET_RADIUS,
@@ -212,14 +211,6 @@ export function CentralStar({
         <ringGeometry args={[HERO_RING_INNER * 0.9, HERO_RING_OUTER * 0.85, 128, 1]} />
       </mesh>
 
-      {/* Hero sparkles */}
-      <Sparkles
-        count={60}
-        scale={R * 5}
-        size={4}
-        speed={0.5}
-        color="#88DDFF"
-      />
     </group>
   );
 }

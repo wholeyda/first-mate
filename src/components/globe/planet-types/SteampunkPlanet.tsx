@@ -35,8 +35,6 @@ export function SteampunkPlanet({ colors }: Props) {
       accentColor="#FFD700"
       atmosphereTint="#C8A882"
       glowIntensity={0.9}
-      sparkleCount={15}
-      sparkleColor="#FFD700"
       hasRings
       ringColor={colors[0] || "#B87333"}
       ringSecondaryColor="#FFD700"
