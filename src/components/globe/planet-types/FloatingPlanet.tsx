@@ -34,10 +34,10 @@ varying vec3 vWorldPos;
 void main() {
   vec3 viewDir = normalize(cameraPosition - vWorldPos);
   float fresnel = 1.0 - dot(viewDir, vNormal);
-  fresnel = pow(fresnel, 2.5);
+  fresnel = pow(fresnel, 1.5);
 
-  vec3 color = uCoronaColor;
-  float alpha = fresnel * uIntensity;
+  vec3 color = uCoronaColor * 1.5;
+  float alpha = fresnel * uIntensity * 1.5;
 
   gl_FragColor = vec4(color, alpha);
 }
@@ -70,7 +70,7 @@ export function FloatingPlanet({ colors }: Props) {
       vertexShader: coronaVertexShader,
       fragmentShader: coronaFragmentShader,
       uniforms: {
-        uIntensity: { value: 0.6 },
+        uIntensity: { value: 1.0 },
         uCoronaColor: { value: new THREE.Color(glowColor) },
       },
       transparent: true,
@@ -86,7 +86,7 @@ export function FloatingPlanet({ colors }: Props) {
     return new THREE.MeshBasicMaterial({
       color: new THREE.Color(glowColor),
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.35,
       side: THREE.BackSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -99,7 +99,7 @@ export function FloatingPlanet({ colors }: Props) {
     return new THREE.MeshBasicMaterial({
       color: new THREE.Color(glowColor),
       transparent: true,
-      opacity: 0.06,
+      opacity: 0.15,
       side: THREE.BackSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -122,16 +122,16 @@ export function FloatingPlanet({ colors }: Props) {
     if (innerGlowRef.current) {
       const mat = innerGlowRef.current.material as THREE.MeshBasicMaterial;
       mat.color.set(glowColor);
-      const pulse = Math.sin(time * 1.5) * 0.04;
-      mat.opacity = 0.15 + pulse;
+      const pulse = Math.sin(time * 1.5) * 0.08;
+      mat.opacity = 0.35 + pulse;
     }
 
     // Pulse outer glow
     if (outerGlowRef.current) {
       const mat = outerGlowRef.current.material as THREE.MeshBasicMaterial;
       mat.color.set(glowColor);
-      const pulse = Math.sin(time * 1.0 + 1.0) * 0.02;
-      mat.opacity = 0.06 + pulse;
+      const pulse = Math.sin(time * 1.0 + 1.0) * 0.05;
+      mat.opacity = 0.15 + pulse;
     }
   });
 
@@ -178,7 +178,7 @@ export function FloatingPlanet({ colors }: Props) {
         <meshBasicMaterial
           color={colors[2] || "#B388FF"}
           transparent
-          opacity={0.15}
+          opacity={0.25}
           side={THREE.BackSide}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
@@ -187,17 +187,17 @@ export function FloatingPlanet({ colors }: Props) {
 
       {/* Fresnel corona */}
       <mesh material={coronaMaterial}>
-        <sphereGeometry args={[PLANET_RADIUS * 1.1, 48, 24]} />
+        <sphereGeometry args={[PLANET_RADIUS * 1.15, 48, 24]} />
       </mesh>
 
       {/* Inner glow halo */}
       <mesh ref={innerGlowRef} material={innerGlowMaterial}>
-        <sphereGeometry args={[PLANET_RADIUS * 1.5, 24, 24]} />
+        <sphereGeometry args={[PLANET_RADIUS * 2.0, 24, 24]} />
       </mesh>
 
       {/* Outer glow halo */}
       <mesh ref={outerGlowRef} material={outerGlowMaterial}>
-        <sphereGeometry args={[PLANET_RADIUS * 2.2, 16, 16]} />
+        <sphereGeometry args={[PLANET_RADIUS * 3.0, 16, 16]} />
       </mesh>
 
       {/* Energy sparkles bridging chunks */}

@@ -72,7 +72,7 @@ varying vec3 vWorldPos;
 void main() {
   vec3 viewDir = normalize(cameraPosition - vWorldPos);
   float fresnel = 1.0 - dot(viewDir, vNormal);
-  fresnel = pow(fresnel, 3.0);
+  fresnel = pow(fresnel, 1.8);
 
   // Energy tendrils — noise-based modulation on the rim
   vec2 noiseCoord = vec2(
@@ -80,13 +80,13 @@ void main() {
     vNormal.y * 3.0 + uTime * 0.3
   );
   float tendril = fbm(noiseCoord * 3.0);
-  tendril = smoothstep(0.25, 0.75, tendril);
+  tendril = smoothstep(0.2, 0.7, tendril);
 
-  // Combine: base rim + tendril flicker
-  float alpha = fresnel * uOpacity * (0.7 + tendril * 0.6);
+  // Combine: base rim + tendril flicker — much more visible
+  float alpha = fresnel * uOpacity * (0.8 + tendril * 0.8);
 
-  // Brighten the rim edge
-  vec3 color = uTint * (1.0 + fresnel * 0.5);
+  // Brighten the rim edge significantly
+  vec3 color = uTint * (1.2 + fresnel * 1.0);
 
   gl_FragColor = vec4(color, alpha);
 }
@@ -112,10 +112,10 @@ varying vec3 vWorldPos;
 void main() {
   vec3 viewDir = normalize(cameraPosition - vWorldPos);
   float fresnel = 1.0 - dot(viewDir, vNormal);
-  fresnel = pow(fresnel, 2.5);
+  fresnel = pow(fresnel, 1.5);
 
-  vec3 color = uCoronaColor;
-  float alpha = fresnel * uIntensity;
+  vec3 color = uCoronaColor * 1.5;
+  float alpha = fresnel * uIntensity * 1.5;
 
   gl_FragColor = vec4(color, alpha);
 }
@@ -170,9 +170,9 @@ export function BasePlanet({
   hasRings = false,
   ringColor,
   coronaColor,
-  coronaOpacity = 0.6,
+  coronaOpacity = 1.0,
   glowColor,
-  glowIntensity = 1.0,
+  glowIntensity = 1.5,
 }: BasePlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
   const coronaRef = useRef<THREE.Mesh>(null);
@@ -223,7 +223,7 @@ export function BasePlanet({
     return new THREE.MeshBasicMaterial({
       color: new THREE.Color(resolvedGlowColor),
       transparent: true,
-      opacity: 0.15 * glowIntensity,
+      opacity: 0.3 * glowIntensity,
       side: THREE.BackSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -236,7 +236,7 @@ export function BasePlanet({
     return new THREE.MeshBasicMaterial({
       color: new THREE.Color(resolvedGlowColor),
       transparent: true,
-      opacity: 0.06 * glowIntensity,
+      opacity: 0.12 * glowIntensity,
       side: THREE.BackSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -283,16 +283,16 @@ export function BasePlanet({
     if (innerGlowRef.current) {
       const mat = innerGlowRef.current.material as THREE.MeshBasicMaterial;
       mat.color.set(resolvedGlowColor);
-      const pulse = Math.sin(time * 1.5) * 0.04;
-      mat.opacity = (0.15 + pulse) * glowIntensity;
+      const pulse = Math.sin(time * 1.5) * 0.08;
+      mat.opacity = (0.3 + pulse) * glowIntensity;
     }
 
     // Pulse outer glow
     if (outerGlowRef.current) {
       const mat = outerGlowRef.current.material as THREE.MeshBasicMaterial;
       mat.color.set(resolvedGlowColor);
-      const pulse = Math.sin(time * 1.0 + 1.0) * 0.02;
-      mat.opacity = (0.06 + pulse) * glowIntensity;
+      const pulse = Math.sin(time * 1.0 + 1.0) * 0.04;
+      mat.opacity = (0.12 + pulse) * glowIntensity;
     }
   });
 
@@ -309,22 +309,22 @@ export function BasePlanet({
 
       {/* Animated atmosphere with energy tendrils */}
       <mesh material={atmoMaterial}>
-        <sphereGeometry args={[radius * 1.18, 32, 32]} />
+        <sphereGeometry args={[radius * 1.25, 32, 32]} />
       </mesh>
 
       {/* Fresnel corona */}
       <mesh ref={coronaRef} material={coronaMaterial}>
-        <sphereGeometry args={[radius * 1.1, 48, 24]} />
+        <sphereGeometry args={[radius * 1.15, 48, 24]} />
       </mesh>
 
       {/* Inner glow halo */}
       <mesh ref={innerGlowRef} material={innerGlowMaterial}>
-        <sphereGeometry args={[radius * 1.5, 24, 24]} />
+        <sphereGeometry args={[radius * 2.0, 24, 24]} />
       </mesh>
 
       {/* Outer glow halo */}
       <mesh ref={outerGlowRef} material={outerGlowMaterial}>
-        <sphereGeometry args={[radius * 2.2, 16, 16]} />
+        <sphereGeometry args={[radius * 3.0, 16, 16]} />
       </mesh>
 
       {/* Ring */}
