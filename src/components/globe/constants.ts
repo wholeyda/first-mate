@@ -6,14 +6,14 @@
 
 // Scene scale: 1 unit ≈ 100px at default camera distance
 export const STAR_RADIUS = 2.5; // Smaller star so planets orbit visibly outside the glow
-export const PLANET_ORBIT_DISTANCE = 7.0; // Well outside star glow (glow reaches ~4.5)
+export const PLANET_ORBIT_DISTANCE = 8.5; // Well outside hero planet ring (ring reaches ~6.0)
 export const PLANET_RADIUS = 0.5; // Visible planet size
 
 // Camera
 export const CAMERA_FOV = 45;
 export const CAMERA_NEAR = 0.1;
 export const CAMERA_FAR = 100;
-export const CAMERA_DISTANCE = 18; // Pulled back to see full orbits
+export const CAMERA_DISTANCE = 20; // Pulled back to see full orbits
 export const ZOOM_MIN_DISTANCE = 8; // Closest zoom
 export const ZOOM_MAX_DISTANCE = 32; // Farthest zoom
 
@@ -22,7 +22,12 @@ export const IDLE_SPEED = 0.15;
 export const ACTIVE_SPEED = 0.6;
 export const SPEED_LERP = 0.04;
 
-// Star glow
+// Hero planet (replaces central star)
+export const HERO_PLANET_RADIUS = 2.0;
+export const HERO_RING_INNER = 3.0;
+export const HERO_RING_OUTER = 6.0;
+
+// Star glow (legacy — mapped to hero planet bloom)
 export const IDLE_GLOW_INTENSITY = 0.8;
 export const ACTIVE_GLOW_MIN = 1.0;
 export const ACTIVE_GLOW_MAX = 2.5;

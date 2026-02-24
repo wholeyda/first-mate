@@ -1,16 +1,14 @@
 /**
  * Nebula Planet (Gas Giant)
  *
- * Colorful banded surface with swirling cloud patterns.
- * Thick multi-layer atmosphere. Saturn-like ring system.
- * Occasional lightning flashes as sparkles.
+ * Colorful glass sphere with swirling nebula colors.
+ * Pulsing glow. Saturn-like accretion disk ring system.
  */
 
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import * as THREE from "three";
 import { BasePlanet } from "./BasePlanet";
 
 interface Props {
@@ -18,38 +16,26 @@ interface Props {
 }
 
 export function NebulaPlanet({ colors }: Props) {
-  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+  const glowRef = useRef(1.2);
 
-  const material = useMemo(() => {
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#9B59B6"),
-      roughness: 0.6,
-      metalness: 0.0,
-      emissive: new THREE.Color(colors[1] || "#6B2FA0"),
-      emissiveIntensity: 0.4,
-    });
-    matRef.current = mat;
-    return mat;
-  }, [colors]);
-
-  // Subtle color shift
+  // Subtle color shift pulse
   useFrame((state) => {
-    if (matRef.current) {
-      const t = Math.sin(state.clock.elapsedTime * 0.5) * 0.1 + 0.4;
-      matRef.current.emissiveIntensity = t;
-    }
+    glowRef.current = 1.0 + Math.sin(state.clock.elapsedTime * 0.5) * 0.2;
   });
 
   return (
     <BasePlanet
-      surfaceMaterial={material}
+      primaryColor={colors[0] || "#9B59B6"}
+      secondaryColor={colors[1] || "#6B2FA0"}
+      accentColor={colors[2] || "#D4A5FF"}
       atmosphereTint="#9B59B6"
-      atmosphereOpacity={0.5}
+      glowIntensity={glowRef.current}
       sparkleCount={20}
       sparkleColor="#D4A5FF"
       scale={1.15}
       hasRings
-      ringColor={colors[2] || "#D4A5FF"}
+      ringColor={colors[0] || "#9B59B6"}
+      ringSecondaryColor={colors[2] || "#D4A5FF"}
     />
   );
 }

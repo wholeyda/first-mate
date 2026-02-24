@@ -4,10 +4,10 @@
  * R3F Canvas with:
  *   - Perspective camera + OrbitControls (zoom only)
  *   - Background starfield
- *   - CentralStar at origin
- *   - Orbiting planets with smooth animation
- *   - Global rotation + active/idle lerp
- *   - Ambient + point light setup
+ *   - HeroPlanet (glass sphere) at origin
+ *   - Orbiting glass planets with smooth animation
+ *   - Post-processing bloom for soft glow
+ *   - Directional + ambient lighting
  */
 
 "use client";
@@ -15,6 +15,7 @@
 import { useRef, useState, useMemo, Suspense, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Stars, Line } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { Island } from "@/types/database";
 import { StarConfig } from "@/types/star-config";
@@ -190,7 +191,7 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick }: Sc
 
   return (
     <group rotation={[SCENE_TILT, 0, 0]}>
-      {/* Central star */}
+      {/* Hero planet (formerly central star) */}
       <CentralStarAnimated
         activeIntensityRef={activeIntensityRef}
         starConfig={starConfig}
@@ -219,10 +220,10 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick }: Sc
         />
       ))}
 
-      {/* Lighting */}
-      <ambientLight intensity={0.4} />
-      <pointLight position={[0, 0, 0]} intensity={2.5} color="#88DDFF" distance={40} />
-      <pointLight position={[15, 8, 10]} intensity={0.8} color="#FFFFFF" />
+      {/* Lighting — directional + ambient (no point light at origin, hero self-illuminates) */}
+      <ambientLight intensity={0.25} />
+      <directionalLight position={[10, 8, 5]} intensity={0.6} color="#FFFFFF" />
+      <pointLight position={[15, 8, 10]} intensity={0.5} color="#FFFFFF" />
     </group>
   );
 }
@@ -240,7 +241,12 @@ export function Globe3DCanvas({ isActive, islands, onIslandClick, starConfig, on
         }}
         dpr={[1, 2]}
         style={{ background: "transparent" }}
-        gl={{ alpha: true, antialias: true }}
+        gl={{
+          alpha: true,
+          antialias: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.0,
+        }}
       >
         <Suspense fallback={null}>
           {/* Background starfield */}
@@ -262,6 +268,17 @@ export function Globe3DCanvas({ isActive, islands, onIslandClick, starConfig, on
             starConfig={starConfig}
             onStarClick={onStarClick}
           />
+
+          {/* Post-processing — soft bloom for emissive glow */}
+          <EffectComposer>
+            <Bloom
+              luminanceThreshold={0.4}
+              luminanceSmoothing={0.9}
+              intensity={1.2}
+              radius={0.8}
+              mipmapBlur
+            />
+          </EffectComposer>
 
           {/* Camera controls: zoom only */}
           <OrbitControls

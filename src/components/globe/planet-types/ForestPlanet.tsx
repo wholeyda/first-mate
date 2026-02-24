@@ -1,15 +1,12 @@
 /**
  * Forest Planet
  *
- * Deep green canopy across the surface.
- * Misty white-green fog atmosphere.
- * Firefly sparkles.
+ * Deep green glass sphere with canopy-like swirls.
+ * Lime green sparkles. Light green atmosphere.
  */
 
 "use client";
 
-import { useMemo } from "react";
-import * as THREE from "three";
 import { BasePlanet } from "./BasePlanet";
 
 interface Props {
@@ -17,21 +14,13 @@ interface Props {
 }
 
 export function ForestPlanet({ colors }: Props) {
-  const material = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#1E6B34"),
-      roughness: 0.85,
-      metalness: 0.0,
-      emissive: new THREE.Color(colors[1] || "#0D4F1C"),
-      emissiveIntensity: 0.3,
-    });
-  }, [colors]);
-
   return (
     <BasePlanet
-      surfaceMaterial={material}
+      primaryColor={colors[0] || "#1E6B34"}
+      secondaryColor={colors[1] || "#0D4F1C"}
+      accentColor="#BFFF00"
       atmosphereTint="#90EE90"
-      atmosphereOpacity={0.3}
+      glowIntensity={0.8}
       sparkleCount={20}
       sparkleColor="#BFFF00"
     />

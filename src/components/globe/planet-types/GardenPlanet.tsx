@@ -1,16 +1,14 @@
 /**
  * Garden Planet
  *
- * Lush greens with soft rolling terrain and emissive flower highlights.
- * Soft golden glow atmosphere.
- * Petal/pollen sparkles.
+ * Lush green glass sphere with pink flower-like swirls.
+ * Pulsing golden glow for bloom effect.
  */
 
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import * as THREE from "three";
 import { BasePlanet } from "./BasePlanet";
 
 interface Props {
@@ -18,33 +16,20 @@ interface Props {
 }
 
 export function GardenPlanet({ colors }: Props) {
-  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+  const glowRef = useRef(0.9);
 
-  const material = useMemo(() => {
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#4CAF50"),
-      roughness: 0.7,
-      metalness: 0.0,
-      emissive: new THREE.Color(colors[1] || "#FF69B4"),
-      emissiveIntensity: 0.3,
-    });
-    matRef.current = mat;
-    return mat;
-  }, [colors]);
-
-  // Gentle emissive pulsing (flowers blooming)
+  // Pulse flower bloom glow
   useFrame((state) => {
-    if (matRef.current) {
-      const t = Math.sin(state.clock.elapsedTime * 2.0) * 0.08 + 0.3;
-      matRef.current.emissiveIntensity = t;
-    }
+    glowRef.current = 0.7 + Math.sin(state.clock.elapsedTime * 2.0) * 0.2;
   });
 
   return (
     <BasePlanet
-      surfaceMaterial={material}
+      primaryColor={colors[0] || "#4CAF50"}
+      secondaryColor={colors[1] || "#FF69B4"}
+      accentColor="#FFD700"
       atmosphereTint="#FFD700"
-      atmosphereOpacity={0.2}
+      glowIntensity={glowRef.current}
       sparkleCount={25}
       sparkleColor="#FFB6C1"
     />

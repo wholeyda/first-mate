@@ -1,13 +1,11 @@
 /**
  * BasePlanet
  *
- * Shared scaffolding for all planet types:
- *   - Sphere geometry with optional vertex displacement
- *   - Thin fresnel atmosphere shell
- *   - Sparkle/particle ambient layer
- *   - Self-spin animation
+ * Glass sphere planet with animated internal swirling colors,
+ * subsurface scattering, FrontSide atmosphere rim, optional
+ * accretion disk ring, sparkles, and self-spin animation.
  *
- * Each planet type renders this with custom materials, children, and extras.
+ * Each planet type passes 3 colors + config to customize the look.
  */
 
 "use client";
@@ -17,63 +15,51 @@ import { useFrame } from "@react-three/fiber";
 import { Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import { PLANET_RADIUS, PLANET_SPIN_SPEED } from "../constants";
+import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "../shaders/glassSphere.glsl";
+import { ATMOSPHERE_RIM_VERTEX, ATMOSPHERE_RIM_FRAGMENT } from "../shaders/atmosphereRim.glsl";
+import { ACCRETION_DISK_VERTEX, ACCRETION_DISK_FRAGMENT } from "../shaders/accretionDisk.glsl";
 
-// ---- Atmosphere fresnel shader ----
-const atmoVertexShader = /* glsl */ `
-varying vec3 vNormal;
-varying vec3 vWorldPos;
-void main() {
-  vNormal = normalize(normalMatrix * normal);
-  vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-
-const atmoFragmentShader = /* glsl */ `
-uniform vec3 uTint;
-uniform float uOpacity;
-varying vec3 vNormal;
-varying vec3 vWorldPos;
-
-void main() {
-  vec3 viewDir = normalize(cameraPosition - vWorldPos);
-  float fresnel = 1.0 - dot(viewDir, vNormal);
-  fresnel = pow(fresnel, 2.5);
-  gl_FragColor = vec4(uTint, fresnel * uOpacity);
-}
-`;
-
-interface BasePlanetProps {
-  /** Surface material (passed as child of <mesh>) */
-  surfaceMaterial: THREE.Material;
-  /** Atmosphere tint color (hex string like "#FF4500") */
+export interface BasePlanetProps {
+  /** Deep interior swirl color */
+  primaryColor: string;
+  /** Mid-tone swirl color */
+  secondaryColor: string;
+  /** Bright emission / SSS accent color */
+  accentColor: string;
+  /** Atmosphere rim glow color */
   atmosphereTint: string;
-  /** Atmosphere opacity 0-1 */
-  atmosphereOpacity: number;
+  /** Bloom multiplier (default 1.0) */
+  glowIntensity?: number;
   /** Sparkle count */
   sparkleCount: number;
   /** Sparkle color (hex) */
   sparkleColor: string;
-  /** Whether to use icosahedron geometry (low-poly look) vs sphere */
+  /** Use icosahedron geometry for low-poly look */
   lowPoly?: boolean;
   /** Geometry detail level */
   detail?: number;
   /** Scale multiplier on PLANET_RADIUS */
   scale?: number;
-  /** Unique spin offset for this planet */
+  /** Unique spin offset */
   spinOffset?: number;
-  /** Extra meshes rendered inside the planet group (rings, moons, etc.) */
+  /** Extra meshes (moons, debris, etc.) */
   children?: React.ReactNode;
-  /** Whether this planet has rings (rendered by parent) */
+  /** Whether this planet has an accretion disk ring */
   hasRings?: boolean;
-  /** Ring color */
+  /** Primary ring color */
   ringColor?: string;
+  /** Secondary ring color */
+  ringSecondaryColor?: string;
+  /** Noise animation speed multiplier (default 1.0) */
+  animationSpeed?: number;
 }
 
 export function BasePlanet({
-  surfaceMaterial,
+  primaryColor,
+  secondaryColor,
+  accentColor,
   atmosphereTint,
-  atmosphereOpacity,
+  glowIntensity = 1.0,
   sparkleCount,
   sparkleColor,
   lowPoly = false,
@@ -83,75 +69,125 @@ export function BasePlanet({
   children,
   hasRings = false,
   ringColor,
+  ringSecondaryColor,
+  animationSpeed = 1.0,
 }: BasePlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
   const radius = PLANET_RADIUS * scale;
 
-  // Atmosphere material
-  const atmoMaterial = useMemo(() => {
-    const color = new THREE.Color(atmosphereTint);
+  // ---- Glass sphere material ----
+  const glassMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
-      vertexShader: atmoVertexShader,
-      fragmentShader: atmoFragmentShader,
+      vertexShader: GLASS_SPHERE_VERTEX,
+      fragmentShader: GLASS_SPHERE_FRAGMENT,
       uniforms: {
-        uTint: { value: new THREE.Vector3(color.r, color.g, color.b) },
-        uOpacity: { value: atmosphereOpacity },
+        uTime: { value: 0 },
+        uAnimSpeed: { value: animationSpeed },
+        uDisplacementStrength: { value: 0.02 },
+        uGlowIntensity: { value: glowIntensity },
+        uColorPrimary: { value: new THREE.Color(primaryColor) },
+        uColorSecondary: { value: new THREE.Color(secondaryColor) },
+        uColorAccent: { value: new THREE.Color(accentColor) },
       },
       transparent: true,
-      side: THREE.BackSide,
-      depthWrite: false,
-      blending: THREE.NormalBlending,
+      depthWrite: true,
     });
-  }, [atmosphereTint, atmosphereOpacity]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Ring geometry
-  const ringGeometry = useMemo(() => {
-    if (!hasRings) return null;
-    return new THREE.RingGeometry(radius * 1.4, radius * 2.0, 64);
-  }, [hasRings, radius]);
-
-  const ringMaterial = useMemo(() => {
-    if (!hasRings || !ringColor) return null;
-    const color = new THREE.Color(ringColor);
-    return new THREE.MeshBasicMaterial({
-      color,
+  // ---- FrontSide atmosphere rim ----
+  const atmosphereMaterial = useMemo(() => {
+    const tint = new THREE.Color(atmosphereTint);
+    return new THREE.ShaderMaterial({
+      vertexShader: ATMOSPHERE_RIM_VERTEX,
+      fragmentShader: ATMOSPHERE_RIM_FRAGMENT,
+      uniforms: {
+        uTint: { value: new THREE.Vector3(tint.r, tint.g, tint.b) },
+        uIntensity: { value: glowIntensity },
+      },
       transparent: true,
-      opacity: 0.35,
+      side: THREE.FrontSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Accretion disk ring material ----
+  const ringMaterial = useMemo(() => {
+    if (!hasRings) return null;
+    const c1 = new THREE.Color(ringColor || primaryColor);
+    const c2 = new THREE.Color(ringSecondaryColor || accentColor);
+    return new THREE.ShaderMaterial({
+      vertexShader: ACCRETION_DISK_VERTEX,
+      fragmentShader: ACCRETION_DISK_FRAGMENT,
+      uniforms: {
+        uTime: { value: 0 },
+        uAnimSpeed: { value: animationSpeed },
+        uRingColor1: { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
+        uRingColor2: { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
+      },
+      transparent: true,
       side: THREE.DoubleSide,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
-  }, [hasRings, ringColor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Self-spin
+  // ---- Animation loop ----
   useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.1);
+
+    // Self-spin
     if (groupRef.current) {
-      groupRef.current.rotation.y += Math.min(delta, 0.1) * PLANET_SPIN_SPEED + spinOffset * 0.001;
+      groupRef.current.rotation.y += dt * PLANET_SPIN_SPEED + spinOffset * 0.001;
+    }
+
+    // Update glass sphere uniforms
+    glassMaterial.uniforms.uTime.value += dt;
+    glassMaterial.uniforms.uGlowIntensity.value = glowIntensity;
+    glassMaterial.uniforms.uAnimSpeed.value = animationSpeed;
+    glassMaterial.uniforms.uColorPrimary.value.set(primaryColor);
+    glassMaterial.uniforms.uColorSecondary.value.set(secondaryColor);
+    glassMaterial.uniforms.uColorAccent.value.set(accentColor);
+
+    // Update atmosphere
+    const tint = new THREE.Color(atmosphereTint);
+    atmosphereMaterial.uniforms.uTint.value.set(tint.r, tint.g, tint.b);
+    atmosphereMaterial.uniforms.uIntensity.value = glowIntensity;
+
+    // Update ring
+    if (ringMaterial) {
+      ringMaterial.uniforms.uTime.value = glassMaterial.uniforms.uTime.value;
+      ringMaterial.uniforms.uAnimSpeed.value = animationSpeed;
     }
   });
 
   return (
     <group ref={groupRef}>
-      {/* Surface */}
-      <mesh material={surfaceMaterial}>
+      {/* Glass sphere surface */}
+      <mesh material={glassMaterial}>
         {lowPoly ? (
           <icosahedronGeometry args={[radius, detail]} />
         ) : (
-          <sphereGeometry args={[radius, detail, detail]} />
+          <sphereGeometry args={[radius, 64, 64]} />
         )}
       </mesh>
 
-      {/* Atmosphere */}
-      <mesh material={atmoMaterial}>
-        <sphereGeometry args={[radius * 1.18, 32, 32]} />
+      {/* Atmosphere rim (FrontSide, AdditiveBlending) */}
+      <mesh material={atmosphereMaterial}>
+        <sphereGeometry args={[radius * 1.05, 32, 32]} />
       </mesh>
 
-      {/* Ring */}
-      {hasRings && ringGeometry && ringMaterial && (
+      {/* Accretion disk ring */}
+      {hasRings && ringMaterial && (
         <mesh
-          geometry={ringGeometry}
           material={ringMaterial}
-          rotation={[Math.PI * 0.4, 0, 0]}
-        />
+          rotation={[Math.PI * 0.42, 0, 0]}
+        >
+          <ringGeometry args={[radius * 1.5, radius * 3.5, 128, 1]} />
+        </mesh>
       )}
 
       {/* Ambient sparkles */}
@@ -159,13 +195,13 @@ export function BasePlanet({
         <Sparkles
           count={sparkleCount}
           scale={radius * 3.5}
-          size={2}
+          size={3}
           speed={0.4}
           color={sparkleColor}
         />
       )}
 
-      {/* Type-specific extras (moons, debris, etc.) */}
+      {/* Type-specific extras (moons, shards, gears, etc.) */}
       {children}
     </group>
   );

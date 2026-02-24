@@ -1,14 +1,12 @@
 /**
  * Tropical Planet
  *
- * Green landmasses over blue ocean.
- * Thin white-blue atmosphere. Cloud wisps.
- * Seabird trail sparkles.
+ * Ocean blue glass sphere with deep water swirls.
+ * Semi-transparent cloud wisps overlay. Sky blue atmosphere.
  */
 
 "use client";
 
-import { useMemo } from "react";
 import * as THREE from "three";
 import { BasePlanet } from "./BasePlanet";
 import { PLANET_RADIUS } from "../constants";
@@ -18,25 +16,17 @@ interface Props {
 }
 
 export function TropicalPlanet({ colors }: Props) {
-  const material = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#2E86C1"),
-      roughness: 0.7,
-      metalness: 0.0,
-      emissive: new THREE.Color(colors[1] || "#1A5276"),
-      emissiveIntensity: 0.2,
-    });
-  }, [colors]);
-
   return (
     <BasePlanet
-      surfaceMaterial={material}
+      primaryColor={colors[0] || "#2E86C1"}
+      secondaryColor={colors[1] || "#1A5276"}
+      accentColor="#87CEEB"
       atmosphereTint="#87CEEB"
-      atmosphereOpacity={0.25}
+      glowIntensity={0.8}
       sparkleCount={10}
       sparkleColor="#FFFFFF"
     >
-      {/* Cloud wisps — semi-transparent shell slightly offset */}
+      {/* Cloud wisps */}
       <mesh>
         <sphereGeometry args={[PLANET_RADIUS * 1.03, 24, 24]} />
         <meshBasicMaterial
@@ -44,6 +34,7 @@ export function TropicalPlanet({ colors }: Props) {
           transparent
           opacity={0.12}
           depthWrite={false}
+          side={THREE.FrontSide}
         />
       </mesh>
     </BasePlanet>

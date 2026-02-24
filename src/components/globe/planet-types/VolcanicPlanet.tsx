@@ -1,16 +1,14 @@
 /**
  * Volcanic Planet
  *
- * Dark basalt surface with glowing orange lava cracks.
- * Vertex displacement for rocky terrain. Red-orange smoky atmosphere.
- * Ember sparkles and a small gray moon.
+ * Dark basalt glass sphere with glowing orange lava swirls.
+ * Pulsing glow intensity. Red-orange atmosphere. Small gray moon.
  */
 
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import * as THREE from "three";
 import { BasePlanet } from "./BasePlanet";
 import { PLANET_RADIUS } from "../constants";
 
@@ -19,34 +17,20 @@ interface Props {
 }
 
 export function VolcanicPlanet({ colors }: Props) {
-  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+  const glowRef = useRef(1.4);
 
-  const material = useMemo(() => {
-    const baseColor = colors[0] || "#2a0a00";
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(baseColor),
-      roughness: 0.9,
-      metalness: 0.1,
-      emissive: new THREE.Color(colors[1] || "#FF4500"),
-      emissiveIntensity: 0.5,
-    });
-    matRef.current = mat;
-    return mat;
-  }, [colors]);
-
-  // Pulse emissive lava glow
+  // Pulse lava glow
   useFrame((state) => {
-    if (matRef.current) {
-      const t = Math.sin(state.clock.elapsedTime * 1.5) * 0.15 + 0.5;
-      matRef.current.emissiveIntensity = t;
-    }
+    glowRef.current = 1.1 + Math.sin(state.clock.elapsedTime * 1.5) * 0.3;
   });
 
   return (
     <BasePlanet
-      surfaceMaterial={material}
+      primaryColor={colors[0] || "#2a0a00"}
+      secondaryColor={colors[1] || "#FF4500"}
+      accentColor="#FF8800"
       atmosphereTint="#FF4500"
-      atmosphereOpacity={0.35}
+      glowIntensity={glowRef.current}
       sparkleCount={40}
       sparkleColor="#FF6B00"
       detail={48}
