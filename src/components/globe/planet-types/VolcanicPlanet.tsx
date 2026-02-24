@@ -24,11 +24,11 @@ export function VolcanicPlanet({ colors }: Props) {
   const material = useMemo(() => {
     const baseColor = colors[0] || "#2a0a00";
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(baseColor).multiplyScalar(0.15),
+      color: new THREE.Color(baseColor),
       roughness: 0.9,
       metalness: 0.1,
       emissive: new THREE.Color(colors[1] || "#FF4500"),
-      emissiveIntensity: 0.25,
+      emissiveIntensity: 0.5,
     });
     matRef.current = mat;
     return mat;
@@ -37,7 +37,7 @@ export function VolcanicPlanet({ colors }: Props) {
   // Pulse emissive lava glow
   useFrame((state) => {
     if (matRef.current) {
-      const t = Math.sin(state.clock.elapsedTime * 1.5) * 0.15 + 0.25;
+      const t = Math.sin(state.clock.elapsedTime * 1.5) * 0.15 + 0.5;
       matRef.current.emissiveIntensity = t;
     }
   });
@@ -50,9 +50,6 @@ export function VolcanicPlanet({ colors }: Props) {
       sparkleCount={40}
       sparkleColor="#FF6B00"
       detail={48}
-      coronaColor="#FF6600"
-      glowColor="#FF4500"
-      glowIntensity={1.2}
     >
       {/* Small gray moon */}
       <mesh position={[PLANET_RADIUS * 2.2, PLANET_RADIUS * 0.5, 0]}>

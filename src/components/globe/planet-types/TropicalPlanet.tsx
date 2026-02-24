@@ -20,11 +20,11 @@ interface Props {
 export function TropicalPlanet({ colors }: Props) {
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#2E86C1").multiplyScalar(0.2),
+      color: new THREE.Color(colors[0] || "#2E86C1"),
       roughness: 0.7,
       metalness: 0.0,
       emissive: new THREE.Color(colors[1] || "#1A5276"),
-      emissiveIntensity: 0.1,
+      emissiveIntensity: 0.2,
     });
   }, [colors]);
 
@@ -35,8 +35,6 @@ export function TropicalPlanet({ colors }: Props) {
       atmosphereOpacity={0.25}
       sparkleCount={10}
       sparkleColor="#FFFFFF"
-      coronaColor="#87CEEB"
-      glowColor="#2E86C1"
     >
       {/* Cloud wisps — semi-transparent shell slightly offset */}
       <mesh>

@@ -22,11 +22,11 @@ export function BioluminescentPlanet({ colors }: Props) {
 
   const material = useMemo(() => {
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#0A0A2E").multiplyScalar(0.5),
+      color: new THREE.Color(colors[0] || "#0A0A2E"),
       roughness: 0.6,
       metalness: 0.1,
       emissive: new THREE.Color(colors[1] || "#00FFFF"),
-      emissiveIntensity: 0.2,
+      emissiveIntensity: 0.5,
     });
     matRef.current = mat;
     return mat;
@@ -35,7 +35,7 @@ export function BioluminescentPlanet({ colors }: Props) {
   // Pulsing bioluminescent glow
   useFrame((state) => {
     if (matRef.current) {
-      const t = Math.sin(state.clock.elapsedTime * 1.8) * 0.15 + 0.2;
+      const t = Math.sin(state.clock.elapsedTime * 1.8) * 0.15 + 0.5;
       matRef.current.emissiveIntensity = t;
     }
   });
@@ -47,9 +47,6 @@ export function BioluminescentPlanet({ colors }: Props) {
       atmosphereOpacity={0.4}
       sparkleCount={30}
       sparkleColor="#00FF88"
-      coronaColor="#00FFFF"
-      glowColor="#00FFFF"
-      glowIntensity={1.3}
     />
   );
 }

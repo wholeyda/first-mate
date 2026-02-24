@@ -24,7 +24,7 @@ export function CrystallinePlanet({ colors }: Props) {
 
   const material = useMemo(() => {
     return new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(colors[0] || "#E0E0FF").multiplyScalar(0.15),
+      color: new THREE.Color(colors[0] || "#E0E0FF"),
       roughness: 0.05,
       metalness: 0.95,
       clearcoat: 1.0,
@@ -32,7 +32,7 @@ export function CrystallinePlanet({ colors }: Props) {
       iridescence: 1.0,
       iridescenceIOR: 1.5,
       emissive: new THREE.Color("#8888FF"),
-      emissiveIntensity: 0.15,
+      emissiveIntensity: 0.3,
     });
   }, [colors]);
 
@@ -53,9 +53,6 @@ export function CrystallinePlanet({ colors }: Props) {
       sparkleColor="#FFFFFF"
       lowPoly
       detail={2}
-      coronaColor="#CCDDFF"
-      glowColor="#E0E0FF"
-      glowIntensity={0.8}
     >
       {/* Orbiting crystal shards */}
       <group ref={shardGroupRef}>

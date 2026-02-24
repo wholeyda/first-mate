@@ -19,11 +19,11 @@ interface Props {
 export function DesertPlanet({ colors }: Props) {
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colors[0] || "#D4A574").multiplyScalar(0.25),
+      color: new THREE.Color(colors[0] || "#D4A574"),
       roughness: 0.95,
       metalness: 0.0,
       emissive: new THREE.Color(colors[1] || "#C8956E"),
-      emissiveIntensity: 0.15,
+      emissiveIntensity: 0.3,
     });
   }, [colors]);
 
@@ -36,8 +36,6 @@ export function DesertPlanet({ colors }: Props) {
       sparkleColor="#E8C89E"
       hasRings
       ringColor={colors[2] || "#C8956E"}
-      coronaColor="#C8956E"
-      glowColor="#D4A574"
     />
   );
 }
