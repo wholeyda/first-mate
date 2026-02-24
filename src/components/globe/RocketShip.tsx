@@ -5,6 +5,10 @@
  * along curved Bezier arcs between random pairs of planets.
  * Each rocket has a simple cone+cylinder mesh with an emissive
  * engine glow (blooms via post-processing) and a fading Trail.
+ *
+ * Theme-aware via useSceneTheme():
+ *   Dark mode  — white/gray rocket with orange engine glow + orange trail
+ *   Light mode — dark gray/black rocket with dark outline + gray trail
  */
 
 "use client";
@@ -14,6 +18,7 @@ import { useFrame } from "@react-three/fiber";
 import { Trail } from "@react-three/drei";
 import * as THREE from "three";
 import { Island } from "@/types/database";
+import { useSceneTheme } from "./SceneThemeContext";
 import { computeOrbitPosition } from "./hooks/useOrbitalMotion";
 import { ROCKET_COUNT, ROCKET_SCALE, ROCKET_SPEED, ROCKET_ARC_HEIGHT } from "./constants";
 
@@ -55,27 +60,38 @@ function pickRandomDest(current: number, count: number): number {
 }
 
 // ---- Individual rocket mesh (simple primitives) ----
-function RocketMesh() {
+// Theme-aware: B&W in light mode, color in dark mode
+function RocketMesh({ isDark }: { isDark: boolean }) {
   const s = ROCKET_SCALE;
+
+  // Dark mode: light grays with orange engine glow
+  // Light mode: dark grays/black with no emissive
+  const noseColor = isDark ? "#DDDDDD" : "#333333";
+  const bodyColor = isDark ? "#BBBBBB" : "#444444";
+  const finColor = isDark ? "#999999" : "#222222";
+  const engineColor = isDark ? "#FF6600" : "#555555";
+  const engineEmissive = isDark ? "#FF4400" : "#000000";
+  const engineEmissiveIntensity = isDark ? 2.0 : 0.0;
+
   return (
     <group rotation={[-Math.PI / 2, 0, 0]}>
       {/* Nose cone */}
       <mesh position={[0, s * 1.2, 0]}>
         <coneGeometry args={[s * 0.35, s * 0.8, 6]} />
-        <meshStandardMaterial color="#DDDDDD" metalness={0.6} roughness={0.3} />
+        <meshStandardMaterial color={noseColor} metalness={0.6} roughness={0.3} />
       </mesh>
       {/* Body cylinder */}
       <mesh position={[0, s * 0.4, 0]}>
         <cylinderGeometry args={[s * 0.35, s * 0.35, s * 1.2, 8]} />
-        <meshStandardMaterial color="#BBBBBB" metalness={0.5} roughness={0.4} />
+        <meshStandardMaterial color={bodyColor} metalness={0.5} roughness={0.4} />
       </mesh>
-      {/* Engine glow (emissive for bloom) */}
+      {/* Engine glow (emissive for bloom in dark mode) */}
       <mesh position={[0, -s * 0.3, 0]}>
         <sphereGeometry args={[s * 0.25, 8, 8]} />
         <meshStandardMaterial
-          color="#FF6600"
-          emissive="#FF4400"
-          emissiveIntensity={2.0}
+          color={engineColor}
+          emissive={engineEmissive}
+          emissiveIntensity={engineEmissiveIntensity}
         />
       </mesh>
       {/* 4 fins */}
@@ -86,9 +102,27 @@ function RocketMesh() {
           rotation={[0, (i * Math.PI) / 2, 0]}
         >
           <boxGeometry args={[s * 0.08, s * 0.5, s * 0.5]} />
-          <meshStandardMaterial color="#999999" metalness={0.4} roughness={0.5} />
+          <meshStandardMaterial color={finColor} metalness={0.4} roughness={0.5} />
         </mesh>
       ))}
+
+      {/* Outline hull (light mode only) — BackSide slightly larger black mesh */}
+      {!isDark && (
+        <>
+          <mesh position={[0, s * 1.2, 0]} scale={1.15}>
+            <coneGeometry args={[s * 0.35, s * 0.8, 6]} />
+            <meshBasicMaterial color="#000000" side={THREE.BackSide} />
+          </mesh>
+          <mesh position={[0, s * 0.4, 0]} scale={1.15}>
+            <cylinderGeometry args={[s * 0.35, s * 0.35, s * 1.2, 8]} />
+            <meshBasicMaterial color="#000000" side={THREE.BackSide} />
+          </mesh>
+          <mesh position={[0, -s * 0.3, 0]} scale={1.15}>
+            <sphereGeometry args={[s * 0.25, 8, 8]} />
+            <meshBasicMaterial color="#000000" side={THREE.BackSide} />
+          </mesh>
+        </>
+      )}
     </group>
   );
 }
@@ -104,6 +138,7 @@ function Rocket({
   initialProgress: number;
 }) {
   const meshRef = useRef<THREE.Group>(null!);
+  const isDark = useSceneTheme();
 
   const state = useRef<RocketState>({
     sourceIndex: Math.floor(Math.random() * islands.length),
@@ -185,15 +220,18 @@ function Rocket({
     meshRef.current.lookAt(lookVec);
   });
 
+  // Trail color: orange in dark mode, dark gray in light mode
+  const trailColor = isDark ? "#FF6600" : "#333333";
+
   return (
     <Trail
       width={ROCKET_SCALE * 3}
       length={6}
-      color="#FF6600"
+      color={trailColor}
       attenuation={(t: number) => t * t}
     >
       <group ref={meshRef}>
-        <RocketMesh />
+        <RocketMesh isDark={isDark} />
       </group>
     </Trail>
   );

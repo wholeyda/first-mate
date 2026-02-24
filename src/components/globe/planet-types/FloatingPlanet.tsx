@@ -3,6 +3,10 @@
  *
  * 5-7 fragmented glass chunks floating in formation with <Float> bobbing.
  * Each chunk uses the glass sphere shader for consistent look.
+ *
+ * Theme-aware via useSceneTheme():
+ *   Dark mode  — full color glass
+ *   Light mode — B&W with dark fresnel outline
  */
 
 "use client";
@@ -12,6 +16,7 @@ import { useFrame } from "@react-three/fiber";
 import { Float } from "@react-three/drei";
 import * as THREE from "three";
 import { PLANET_RADIUS } from "../constants";
+import { useSceneTheme } from "../SceneThemeContext";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "../shaders/glassSphere.glsl";
 
 interface Props {
@@ -20,6 +25,7 @@ interface Props {
 
 export function FloatingPlanet({ colors }: Props) {
   const groupRef = useRef<THREE.Group>(null);
+  const isDark = useSceneTheme();
 
   // Glass chunk material
   const glassMaterial = useMemo(() => {
@@ -31,6 +37,7 @@ export function FloatingPlanet({ colors }: Props) {
         uAnimSpeed: { value: 1.0 },
         uDisplacementStrength: { value: 0.0 },
         uGlowIntensity: { value: 1.5 },
+        uIsDark: { value: 1.0 },
         uColorPrimary: { value: new THREE.Color(colors[0] || "#8E44AD") },
         uColorSecondary: { value: new THREE.Color(colors[1] || "#B388FF") },
         uColorAccent: { value: new THREE.Color(colors[2] || "#CE93D8") },
@@ -40,13 +47,14 @@ export function FloatingPlanet({ colors }: Props) {
     });
   }, [colors]);
 
-  // Slow group rotation + time update
+  // Slow group rotation + time + theme update
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.1);
     if (groupRef.current) {
       groupRef.current.rotation.y += dt * 0.2;
     }
     glassMaterial.uniforms.uTime.value += dt;
+    glassMaterial.uniforms.uIsDark.value = isDark ? 1.0 : 0.0;
   });
 
   // Generate chunk positions

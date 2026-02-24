@@ -5,6 +5,10 @@
  * animated internal swirling colors, subsurface scattering,
  * wide accretion disk, and FrontSide atmosphere rim.
  *
+ * Theme-aware via useSceneTheme():
+ *   Dark mode  — full color glass with HDR bloom
+ *   Light mode — B&W with dark fresnel outline
+ *
  * Customizable via StarConfig — maps color theme + style sliders
  * to shader uniforms for real-time preview.
  *
@@ -25,6 +29,7 @@ import {
   ACTIVE_GLOW_MAX,
 } from "./constants";
 import { StarConfig, DEFAULT_STAR_CONFIG } from "@/types/star-config";
+import { useSceneTheme } from "./SceneThemeContext";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "./shaders/glassSphere.glsl";
 import { ATMOSPHERE_RIM_VERTEX, ATMOSPHERE_RIM_FRAGMENT } from "./shaders/atmosphereRim.glsl";
 import { ACCRETION_DISK_VERTEX, ACCRETION_DISK_FRAGMENT } from "./shaders/accretionDisk.glsl";
@@ -41,6 +46,7 @@ export function CentralStar({
   onStarClick,
 }: HeroPlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const isDark = useSceneTheme();
 
   const cfg = config ?? DEFAULT_STAR_CONFIG;
   const R = HERO_PLANET_RADIUS;
@@ -56,6 +62,7 @@ export function CentralStar({
           uAnimSpeed: { value: cfg.style.animationSpeed },
           uDisplacementStrength: { value: cfg.style.displacementStrength },
           uGlowIntensity: { value: cfg.style.glowIntensity },
+          uIsDark: { value: 1.0 },
           uColorPrimary: { value: new THREE.Color(cfg.colorTheme.primary) },
           uColorSecondary: { value: new THREE.Color(cfg.colorTheme.secondary) },
           uColorAccent: { value: new THREE.Color(cfg.colorTheme.tertiary) },
@@ -76,6 +83,7 @@ export function CentralStar({
       uniforms: {
         uTint: { value: new THREE.Vector3(tint.r, tint.g, tint.b) },
         uIntensity: { value: cfg.style.glowIntensity },
+        uIsDark: { value: 1.0 },
       },
       transparent: true,
       side: THREE.FrontSide,
@@ -95,6 +103,7 @@ export function CentralStar({
       uniforms: {
         uTime: { value: 0 },
         uAnimSpeed: { value: cfg.style.animationSpeed },
+        uIsDark: { value: 1.0 },
         uRingColor1: { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
         uRingColor2: { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
       },
@@ -116,6 +125,7 @@ export function CentralStar({
       uniforms: {
         uTime: { value: 0 },
         uAnimSpeed: { value: cfg.style.animationSpeed * 0.7 },
+        uIsDark: { value: 1.0 },
         uRingColor1: { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
         uRingColor2: { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
       },
@@ -131,6 +141,7 @@ export function CentralStar({
     const dt = Math.min(delta, 0.1);
     const glowMult = cfg.style.glowIntensity;
     const time = glassMaterial.uniforms.uTime.value + dt;
+    const darkVal = isDark ? 1.0 : 0.0;
 
     // ---- Update glass sphere uniforms ----
     glassMaterial.uniforms.uTime.value = time;
@@ -138,6 +149,7 @@ export function CentralStar({
       (glassMaterial.uniforms.uActiveIntensity.value = activeIntensity);
     glassMaterial.uniforms.uAnimSpeed.value = cfg.style.animationSpeed;
     glassMaterial.uniforms.uDisplacementStrength.value = cfg.style.displacementStrength;
+    glassMaterial.uniforms.uIsDark.value = darkVal;
     glassMaterial.uniforms.uColorPrimary.value.set(cfg.colorTheme.primary);
     glassMaterial.uniforms.uColorSecondary.value.set(cfg.colorTheme.secondary);
     glassMaterial.uniforms.uColorAccent.value.set(cfg.colorTheme.tertiary);
@@ -156,19 +168,40 @@ export function CentralStar({
     const tint = new THREE.Color(cfg.colorTheme.innerGlow);
     atmosphereMaterial.uniforms.uTint.value.set(tint.r, tint.g, tint.b);
     atmosphereMaterial.uniforms.uIntensity.value = glowTarget * glowMult;
+    atmosphereMaterial.uniforms.uIsDark.value = darkVal;
+
+    // Switch atmosphere blending
+    const atmoBlending = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
+    if (atmosphereMaterial.blending !== atmoBlending) {
+      atmosphereMaterial.blending = atmoBlending;
+      atmosphereMaterial.needsUpdate = true;
+    }
 
     // ---- Update rings ----
     const rc1 = new THREE.Color(cfg.colorTheme.coronaInner);
     const rc2 = new THREE.Color(cfg.colorTheme.coronaOuter);
     ringMaterial.uniforms.uTime.value = time;
     ringMaterial.uniforms.uAnimSpeed.value = cfg.style.animationSpeed;
+    ringMaterial.uniforms.uIsDark.value = darkVal;
     ringMaterial.uniforms.uRingColor1.value.set(rc1.r, rc1.g, rc1.b);
     ringMaterial.uniforms.uRingColor2.value.set(rc2.r, rc2.g, rc2.b);
 
     ring2Material.uniforms.uTime.value = time;
     ring2Material.uniforms.uAnimSpeed.value = cfg.style.animationSpeed * 0.7;
+    ring2Material.uniforms.uIsDark.value = darkVal;
     ring2Material.uniforms.uRingColor1.value.set(rc2.r, rc2.g, rc2.b);
     ring2Material.uniforms.uRingColor2.value.set(rc1.r, rc1.g, rc1.b);
+
+    // Switch ring blending
+    const ringBlending = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
+    if (ringMaterial.blending !== ringBlending) {
+      ringMaterial.blending = ringBlending;
+      ringMaterial.needsUpdate = true;
+    }
+    if (ring2Material.blending !== ringBlending) {
+      ring2Material.blending = ringBlending;
+      ring2Material.needsUpdate = true;
+    }
 
     // Slow rotation
     if (groupRef.current) {

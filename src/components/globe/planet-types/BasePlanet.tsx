@@ -5,7 +5,9 @@
  * subsurface scattering, FrontSide atmosphere rim, optional
  * accretion disk ring, and self-spin animation.
  *
- * Each planet type passes 3 colors + config to customize the look.
+ * Theme-aware via useSceneTheme():
+ *   Dark mode  — full color glass with HDR bloom
+ *   Light mode — B&W with dark fresnel outline
  */
 
 "use client";
@@ -14,6 +16,7 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { PLANET_RADIUS, PLANET_SPIN_SPEED } from "../constants";
+import { useSceneTheme } from "../SceneThemeContext";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "../shaders/glassSphere.glsl";
 import { ATMOSPHERE_RIM_VERTEX, ATMOSPHERE_RIM_FRAGMENT } from "../shaders/atmosphereRim.glsl";
 import { ACCRETION_DISK_VERTEX, ACCRETION_DISK_FRAGMENT } from "../shaders/accretionDisk.glsl";
@@ -67,6 +70,7 @@ export function BasePlanet({
 }: BasePlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
   const radius = PLANET_RADIUS * scale;
+  const isDark = useSceneTheme();
 
   // ---- Glass sphere material ----
   const glassMaterial = useMemo(() => {
@@ -78,6 +82,7 @@ export function BasePlanet({
         uAnimSpeed: { value: animationSpeed },
         uDisplacementStrength: { value: 0.02 },
         uGlowIntensity: { value: glowIntensity },
+        uIsDark: { value: 1.0 },
         uColorPrimary: { value: new THREE.Color(primaryColor) },
         uColorSecondary: { value: new THREE.Color(secondaryColor) },
         uColorAccent: { value: new THREE.Color(accentColor) },
@@ -97,6 +102,7 @@ export function BasePlanet({
       uniforms: {
         uTint: { value: new THREE.Vector3(tint.r, tint.g, tint.b) },
         uIntensity: { value: glowIntensity },
+        uIsDark: { value: 1.0 },
       },
       transparent: true,
       side: THREE.FrontSide,
@@ -117,6 +123,7 @@ export function BasePlanet({
       uniforms: {
         uTime: { value: 0 },
         uAnimSpeed: { value: animationSpeed },
+        uIsDark: { value: 1.0 },
         uRingColor1: { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
         uRingColor2: { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
       },
@@ -131,6 +138,7 @@ export function BasePlanet({
   // ---- Animation loop ----
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.1);
+    const darkVal = isDark ? 1.0 : 0.0;
 
     // Self-spin
     if (groupRef.current) {
@@ -141,6 +149,7 @@ export function BasePlanet({
     glassMaterial.uniforms.uTime.value += dt;
     glassMaterial.uniforms.uGlowIntensity.value = glowIntensity;
     glassMaterial.uniforms.uAnimSpeed.value = animationSpeed;
+    glassMaterial.uniforms.uIsDark.value = darkVal;
     glassMaterial.uniforms.uColorPrimary.value.set(primaryColor);
     glassMaterial.uniforms.uColorSecondary.value.set(secondaryColor);
     glassMaterial.uniforms.uColorAccent.value.set(accentColor);
@@ -149,11 +158,26 @@ export function BasePlanet({
     const tint = new THREE.Color(atmosphereTint);
     atmosphereMaterial.uniforms.uTint.value.set(tint.r, tint.g, tint.b);
     atmosphereMaterial.uniforms.uIntensity.value = glowIntensity;
+    atmosphereMaterial.uniforms.uIsDark.value = darkVal;
+
+    // Switch atmosphere blending: additive for dark (glow), normal for light (outline)
+    const targetBlending = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
+    if (atmosphereMaterial.blending !== targetBlending) {
+      atmosphereMaterial.blending = targetBlending;
+      atmosphereMaterial.needsUpdate = true;
+    }
 
     // Update ring
     if (ringMaterial) {
       ringMaterial.uniforms.uTime.value = glassMaterial.uniforms.uTime.value;
       ringMaterial.uniforms.uAnimSpeed.value = animationSpeed;
+      ringMaterial.uniforms.uIsDark.value = darkVal;
+
+      const ringBlending = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
+      if (ringMaterial.blending !== ringBlending) {
+        ringMaterial.blending = ringBlending;
+        ringMaterial.needsUpdate = true;
+      }
     }
   });
 
@@ -168,7 +192,7 @@ export function BasePlanet({
         )}
       </mesh>
 
-      {/* Atmosphere rim (FrontSide, AdditiveBlending) */}
+      {/* Atmosphere rim (FrontSide) */}
       <mesh material={atmosphereMaterial}>
         <sphereGeometry args={[radius * 1.05, 32, 32]} />
       </mesh>

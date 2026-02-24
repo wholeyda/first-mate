@@ -3,11 +3,12 @@
  *
  * R3F Canvas with:
  *   - Perspective camera + OrbitControls (zoom only)
- *   - Background starfield
+ *   - Background starfield (dark mode only)
  *   - HeroPlanet (glass sphere) at origin
  *   - Orbiting glass planets with smooth animation
  *   - Post-processing bloom for soft glow
  *   - Directional + ambient lighting
+ *   - Theme-aware: B&W with outlines in light mode
  */
 
 "use client";
@@ -19,6 +20,8 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { Island } from "@/types/database";
 import { StarConfig } from "@/types/star-config";
+import { useTheme } from "@/components/theme-provider";
+import { SceneThemeProvider } from "./SceneThemeContext";
 import { CentralStar } from "./CentralStar";
 import { RocketFleet } from "./RocketShip";
 import { getOrbitPathPoints } from "./hooks/useOrbitalMotion";
@@ -58,6 +61,7 @@ interface SceneProps {
   onIslandClick?: (island: Island) => void;
   starConfig?: StarConfig;
   onStarClick?: () => void;
+  isDark: boolean;
 }
 
 // ---- Planet type renderer (inline to avoid import cycle) ----
@@ -163,7 +167,7 @@ function CentralStarAnimated({
 }
 
 // ---- Main scene (inside Canvas) ----
-function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick }: SceneProps) {
+function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDark }: SceneProps) {
   const angleRef = useRef(0);
   const speedRef = useRef(IDLE_SPEED);
   const activeIntensityRef = useRef(0);
@@ -191,51 +195,70 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick }: Sc
   }, [islands]);
 
   return (
-    <group rotation={[SCENE_TILT, 0, 0]}>
-      {/* Hero planet (formerly central star) */}
-      <CentralStarAnimated
-        activeIntensityRef={activeIntensityRef}
-        starConfig={starConfig}
-        onStarClick={onStarClick}
-      />
-
-      {/* Orbit path lines */}
-      {orbitPaths.map(({ id, points }) => (
-        <Line
-          key={`orbit-${id}`}
-          points={points}
-          color="white"
-          lineWidth={0.5}
-          opacity={0.08}
-          transparent
+    <SceneThemeProvider isDark={isDark}>
+      <group rotation={[SCENE_TILT, 0, 0]}>
+        {/* Hero planet (formerly central star) */}
+        <CentralStarAnimated
+          activeIntensityRef={activeIntensityRef}
+          starConfig={starConfig}
+          onStarClick={onStarClick}
         />
-      ))}
 
-      {/* Orbiting planets */}
-      {islands.map((island) => (
-        <OrbitingPlanet
-          key={island.id}
-          island={island}
-          angleRef={angleRef}
-          onClick={onIslandClick}
+        {/* Orbit path lines */}
+        {orbitPaths.map(({ id, points }) => (
+          <Line
+            key={`orbit-${id}`}
+            points={points}
+            color={isDark ? "white" : "#333333"}
+            lineWidth={0.5}
+            opacity={isDark ? 0.08 : 0.15}
+            transparent
+          />
+        ))}
+
+        {/* Orbiting planets */}
+        {islands.map((island) => (
+          <OrbitingPlanet
+            key={island.id}
+            island={island}
+            angleRef={angleRef}
+            onClick={onIslandClick}
+          />
+        ))}
+
+        {/* Rocket ships flying between planets */}
+        {islands.length >= 2 && (
+          <RocketFleet islands={islands} angleRef={angleRef} />
+        )}
+
+        {/* Lighting — brighter in light mode for B&W look */}
+        <ambientLight intensity={isDark ? 0.25 : 0.8} />
+        <directionalLight
+          position={[10, 8, 5]}
+          intensity={isDark ? 0.6 : 1.0}
+          color="#FFFFFF"
         />
-      ))}
-
-      {/* Rocket ships flying between planets */}
-      {islands.length >= 2 && (
-        <RocketFleet islands={islands} angleRef={angleRef} />
-      )}
-
-      {/* Lighting — directional + ambient (no point light at origin, hero self-illuminates) */}
-      <ambientLight intensity={0.25} />
-      <directionalLight position={[10, 8, 5]} intensity={0.6} color="#FFFFFF" />
-      <pointLight position={[15, 8, 10]} intensity={0.5} color="#FFFFFF" />
-    </group>
+        <pointLight
+          position={[15, 8, 10]}
+          intensity={isDark ? 0.5 : 0.8}
+          color="#FFFFFF"
+        />
+      </group>
+    </SceneThemeProvider>
   );
 }
 
 // ---- Exported Canvas wrapper ----
-export function Globe3DCanvas({ isActive, islands, onIslandClick, starConfig, onStarClick }: SceneProps) {
+export function Globe3DCanvas({
+  isActive,
+  islands,
+  onIslandClick,
+  starConfig,
+  onStarClick,
+}: Omit<SceneProps, "isDark">) {
+  // Read theme from app-level context (outside Canvas)
+  const { isDark } = useTheme();
+
   return (
     <div className="w-[900px] h-[900px]">
       <Canvas
@@ -255,16 +278,18 @@ export function Globe3DCanvas({ isActive, islands, onIslandClick, starConfig, on
         }}
       >
         <Suspense fallback={null}>
-          {/* Background starfield */}
-          <Stars
-            radius={50}
-            depth={50}
-            count={3000}
-            factor={4}
-            saturation={0}
-            fade
-            speed={0.5}
-          />
+          {/* Background starfield — only in dark mode */}
+          {isDark && (
+            <Stars
+              radius={50}
+              depth={50}
+              count={3000}
+              factor={4}
+              saturation={0}
+              fade
+              speed={0.5}
+            />
+          )}
 
           {/* Main scene */}
           <Scene
@@ -273,14 +298,15 @@ export function Globe3DCanvas({ isActive, islands, onIslandClick, starConfig, on
             onIslandClick={onIslandClick}
             starConfig={starConfig}
             onStarClick={onStarClick}
+            isDark={isDark}
           />
 
-          {/* Post-processing — soft bloom for emissive glow */}
+          {/* Post-processing — reduced bloom in light mode */}
           <EffectComposer>
             <Bloom
-              luminanceThreshold={0.4}
+              luminanceThreshold={isDark ? 0.4 : 0.9}
               luminanceSmoothing={0.9}
-              intensity={1.2}
+              intensity={isDark ? 1.2 : 0.2}
               radius={0.8}
               mipmapBlur
             />
