@@ -53,15 +53,15 @@ export function NewsPanel({ maxItems }: { maxItems?: number }) {
 
   if (isLoading && news.length === 0) {
     return (
-      <div className="px-5 pb-1">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+      <div className="px-6 pb-2">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Tips & Resources
         </h3>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {[1, 2].map((i) => (
             <div
               key={i}
-              className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 animate-pulse"
+              className="border border-gray-100 dark:border-gray-800 rounded-xl p-4 animate-pulse"
             >
               <div className="flex-1">
                 <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-3/4 mb-1.5" />
@@ -87,8 +87,8 @@ export function NewsPanel({ maxItems }: { maxItems?: number }) {
   const displayNews = maxItems ? news.slice(0, maxItems) : news;
 
   return (
-    <div className="px-5 pb-1">
-      <div className="flex items-center justify-between mb-3">
+    <div className="px-6 pb-2">
+      <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Tips & Resources
         </h3>
@@ -101,11 +101,11 @@ export function NewsPanel({ maxItems }: { maxItems?: number }) {
           ↻
         </button>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-3.5">
         {displayNews.map((item, index) => (
           <div
             key={index}
-            className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 hover:border-gray-300 dark:hover:border-gray-600 transition-colors relative group"
+            className="border border-gray-100 dark:border-gray-800 rounded-xl p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors relative group"
           >
             {/* Dismiss button */}
             <button
