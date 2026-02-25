@@ -9,7 +9,6 @@
  *   - "Get Started" button on the final slide
  *   - Skip button (top-right)
  *   - Dark mode support
- *   - CSS slide transitions
  *
  * Opens automatically on first login, and manually via "Instructions" button.
  */
@@ -21,7 +20,6 @@ import { useState, useCallback } from "react";
 // ---- Slide configuration ----
 
 interface Slide {
-  icon: string;
   title: string;
   body: string;
   highlights?: string[];
@@ -29,9 +27,8 @@ interface Slide {
 
 const SLIDES: Slide[] = [
   {
-    icon: "\u2693", // anchor
     title: "Welcome to First Mate",
-    body: "First Mate is your AI-powered productivity companion. It helps you set meaningful goals, break them into actionable steps, and schedule dedicated time on your calendar \u2014 so you actually follow through.",
+    body: "First Mate is your AI-powered productivity companion. It helps you set meaningful goals, break them into actionable steps, and schedule dedicated time on your calendar — so you actually follow through.",
     highlights: [
       "Tell the AI what you want to accomplish",
       "It creates structured goals with smart scheduling",
@@ -39,9 +36,8 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    icon: "\uD83D\uDCAC", // speech bubble
     title: "Chat with Your AI",
-    body: "The chat is your primary interface. Describe any goal \u2014 personal or professional \u2014 and First Mate will help you define it, estimate the time commitment, and find space on your calendar.",
+    body: "The chat is your primary interface. Describe any goal — personal or professional — and First Mate will help you define it, estimate the time commitment, and find space on your calendar.",
     highlights: [
       "Natural conversation to define goals",
       "Automatic scheduling to your Google Calendar",
@@ -49,7 +45,6 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    icon: "\uD83C\uDFAF", // target
     title: "Goals & Subtasks",
     body: "Your active goals appear in the sidebar on the right. Each goal tracks priority, estimated hours, and deadlines. Click any goal to decompose it into smaller subtasks for step-by-step progress.",
     highlights: [
@@ -59,7 +54,6 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    icon: "\uD83D\uDCC5", // calendar
     title: "Calendar Integration",
     body: "Switch to the Calendar tab to see your scheduled work blocks. First Mate automatically proposes time slots based on your availability and syncs with Google Calendar.",
     highlights: [
@@ -69,17 +63,15 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    icon: "\uD83C\uDF0D", // globe
     title: "Your Solar System",
     body: "Every completed goal becomes a unique planet orbiting your central star. Each planet type and color reflects the goal you accomplished. Build your solar system as you achieve more.",
     highlights: [
-      "Complete a goal \u2192 answer a reflection \u2192 earn a planet",
+      "Complete a goal, answer a reflection, earn a planet",
       "12 unique planet types with custom colors",
       "Click the center star to customize its appearance",
     ],
   },
   {
-    icon: "\uD83D\uDCA1", // lightbulb
     title: "Tips & Recommendations",
     body: "The sidebar also surfaces curated tips, resources, and articles relevant to your active goals. These refresh automatically and can be dismissed or refreshed manually.",
     highlights: [
@@ -138,8 +130,10 @@ export function InstructionsModal({ isOpen, onClose }: InstructionsModalProps) {
 
         {/* Slide content */}
         <div className="px-10 pt-10 pb-6">
-          {/* Icon */}
-          <div className="text-4xl mb-4">{slide.icon}</div>
+          {/* Slide counter */}
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
+            {currentSlide + 1} / {totalSlides}
+          </p>
 
           {/* Title */}
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3">
@@ -153,13 +147,13 @@ export function InstructionsModal({ isOpen, onClose }: InstructionsModalProps) {
 
           {/* Highlight bullets */}
           {slide.highlights && (
-            <ul className="space-y-2 mb-2">
+            <ul className="space-y-2.5 mb-2">
               {slide.highlights.map((item, i) => (
                 <li
                   key={i}
-                  className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"
+                  className="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300"
                 >
-                  <span className="text-gray-400 dark:text-gray-500 mt-0.5 text-xs">\u2022</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 mt-1.5 flex-shrink-0" />
                   {item}
                 </li>
               ))}
@@ -180,7 +174,7 @@ export function InstructionsModal({ isOpen, onClose }: InstructionsModalProps) {
             }`}
             aria-label="Previous slide"
           >
-            \u2190
+            &larr;
           </button>
 
           {/* Dot indicators */}
@@ -213,7 +207,7 @@ export function InstructionsModal({ isOpen, onClose }: InstructionsModalProps) {
               className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-sm"
               aria-label="Next slide"
             >
-              \u2192
+              &rarr;
             </button>
           )}
         </div>
