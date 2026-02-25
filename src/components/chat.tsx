@@ -360,50 +360,55 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   }
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-950 overflow-hidden">
-      {/* Scrollable content area: globe + messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
-        {/* Globe */}
-        <div className="flex-none pt-6">
-          <Globe
-            isActive={isLoading}
-            islands={islands}
-            onIslandClick={handlePlanetClick}
-            starConfig={starConfig}
-            onStarClick={onStarClick}
-          />
-        </div>
-
-        {/* Last assistant response only */}
-        <div className="flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full">
-        {displayMessages.length === 0 && !isLoading && (
-          <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-4">
-            What would you like to accomplish?
-          </p>
-        )}
-
-        <div className="space-y-5">
-          {displayMessages.map((item) => (
-            <div
-              key={`msg-${item.originalIndex}`}
-              className="chat-message-fade"
-            >
-              <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
-                {item.message.content}
-              </p>
-              {isScheduling && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 animate-pulse">
-                  Scheduling...
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-        </div>
+    <div className="relative flex flex-col h-full bg-white dark:bg-gray-950 overflow-hidden">
+      {/* Globe — absolute background filling the entire panel */}
+      <div className="absolute inset-0 z-0">
+        <Globe
+          isActive={isLoading}
+          islands={islands}
+          onIslandClick={handlePlanetClick}
+          starConfig={starConfig}
+          onStarClick={onStarClick}
+        />
       </div>
 
-      {/* Quick reply pills + Input — always visible at bottom */}
-      <div className="flex-none p-4 max-w-2xl mx-auto w-full">
+      {/* Content overlay on top of globe */}
+      <div className="relative z-10 flex flex-col h-full pointer-events-none">
+        {/* Scrollable messages area */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 pointer-events-auto">
+          {/* Spacer to push messages below the globe center */}
+          <div className="min-h-[60vh]" />
+
+          {/* Last assistant response only */}
+          <div className="flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full">
+          {displayMessages.length === 0 && !isLoading && (
+            <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-4">
+              What would you like to accomplish?
+            </p>
+          )}
+
+          <div className="space-y-5">
+            {displayMessages.map((item) => (
+              <div
+                key={`msg-${item.originalIndex}`}
+                className="chat-message-fade"
+              >
+                <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
+                  {item.message.content}
+                </p>
+                {isScheduling && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 animate-pulse">
+                    Scheduling...
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+          </div>
+        </div>
+
+        {/* Quick reply pills + Input — always visible at bottom */}
+        <div className="flex-none p-4 max-w-2xl mx-auto w-full pointer-events-auto">
         {quickReplies.length > 0 && !isLoading && (
           <div className="flex flex-wrap gap-2 mb-3">
             {quickReplies.map((reply) => (
@@ -447,6 +452,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
             Send
           </button>
         </form>
+      </div>
       </div>
 
       {/* Planet removal modal */}

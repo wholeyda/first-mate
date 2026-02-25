@@ -260,7 +260,7 @@ export function Globe3DCanvas({
   const { isDark } = useTheme();
 
   return (
-    <div className="w-full max-w-[520px] aspect-square mx-auto">
+    <div className="w-full h-full">
       <Canvas
         camera={{
           fov: CAMERA_FOV,

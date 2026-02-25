@@ -13,7 +13,7 @@ export const PLANET_RADIUS = 0.5; // Visible planet size
 export const CAMERA_FOV = 45;
 export const CAMERA_NEAR = 0.1;
 export const CAMERA_FAR = 100;
-export const CAMERA_DISTANCE = 16; // See full orbits with tighter framing
+export const CAMERA_DISTANCE = 20; // See full orbits
 export const ZOOM_MIN_DISTANCE = 8; // Closest zoom
 export const ZOOM_MAX_DISTANCE = 32; // Farthest zoom
 

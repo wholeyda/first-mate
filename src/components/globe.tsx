@@ -33,22 +33,20 @@ const Globe3DCanvas = dynamic(
 
 export function Globe({ isActive, islands = [], onIslandClick, starConfig, onStarClick }: GlobeProps) {
   return (
-    <div className="flex justify-center items-center">
-      <Suspense
-        fallback={
-          <div className="w-full max-w-[520px] aspect-square mx-auto flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
-          </div>
-        }
-      >
-        <Globe3DCanvas
-          isActive={isActive}
-          islands={islands}
-          onIslandClick={onIslandClick}
-          starConfig={starConfig}
-          onStarClick={onStarClick}
-        />
-      </Suspense>
-    </div>
+    <Suspense
+      fallback={
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <Globe3DCanvas
+        isActive={isActive}
+        islands={islands}
+        onIslandClick={onIslandClick}
+        starConfig={starConfig}
+        onStarClick={onStarClick}
+      />
+    </Suspense>
   );
 }
