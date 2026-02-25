@@ -55,8 +55,8 @@ export default async function DashboardPage() {
   return (
     <div className="h-screen bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* Top bar */}
-      <header className="border-b border-gray-100 dark:border-gray-800 px-6 py-3">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
+      <header className="border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between px-8 py-3">
           <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">First Mate</h1>
           <div className="flex items-center gap-4">
             <span className="text-gray-400 dark:text-gray-500 text-sm">{user.email}</span>
