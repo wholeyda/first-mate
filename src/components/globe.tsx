@@ -36,7 +36,7 @@ export function Globe({ isActive, islands = [], onIslandClick, starConfig, onSta
     <div className="flex justify-center items-center">
       <Suspense
         fallback={
-          <div className="w-[900px] h-[900px] flex items-center justify-center">
+          <div className="w-full max-w-[520px] aspect-square mx-auto flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
           </div>
         }

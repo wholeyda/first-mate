@@ -3,7 +3,7 @@
  *
  * Large glass sphere planet at the center of the scene with
  * animated internal swirling colors, subsurface scattering,
- * wide accretion disk, and FrontSide atmosphere rim.
+ * and FrontSide atmosphere rim.
  *
  * Theme-aware via useSceneTheme():
  *   Dark mode  — full color glass with HDR bloom
@@ -22,8 +22,6 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import {
   HERO_PLANET_RADIUS,
-  HERO_RING_INNER,
-  HERO_RING_OUTER,
   IDLE_GLOW_INTENSITY,
   ACTIVE_GLOW_MIN,
   ACTIVE_GLOW_MAX,
@@ -32,7 +30,6 @@ import { StarConfig, DEFAULT_STAR_CONFIG } from "@/types/star-config";
 import { useSceneTheme } from "./SceneThemeContext";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "./shaders/glassSphere.glsl";
 import { ATMOSPHERE_RIM_VERTEX, ATMOSPHERE_RIM_FRAGMENT } from "./shaders/atmosphereRim.glsl";
-import { ACCRETION_DISK_VERTEX, ACCRETION_DISK_FRAGMENT } from "./shaders/accretionDisk.glsl";
 
 interface HeroPlanetProps {
   activeIntensity: number;
@@ -93,50 +90,6 @@ export function CentralStar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Accretion disk material ----
-  const ringMaterial = useMemo(() => {
-    const c1 = new THREE.Color(cfg.colorTheme.coronaInner);
-    const c2 = new THREE.Color(cfg.colorTheme.coronaOuter);
-    return new THREE.ShaderMaterial({
-      vertexShader: ACCRETION_DISK_VERTEX,
-      fragmentShader: ACCRETION_DISK_FRAGMENT,
-      uniforms: {
-        uTime: { value: 0 },
-        uAnimSpeed: { value: cfg.style.animationSpeed },
-        uIsDark: { value: 1.0 },
-        uRingColor1: { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
-        uRingColor2: { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
-      },
-      transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ---- Second offset ring for depth illusion ----
-  const ring2Material = useMemo(() => {
-    const c1 = new THREE.Color(cfg.colorTheme.coronaOuter);
-    const c2 = new THREE.Color(cfg.colorTheme.coronaInner);
-    return new THREE.ShaderMaterial({
-      vertexShader: ACCRETION_DISK_VERTEX,
-      fragmentShader: ACCRETION_DISK_FRAGMENT,
-      uniforms: {
-        uTime: { value: 0 },
-        uAnimSpeed: { value: cfg.style.animationSpeed * 0.7 },
-        uIsDark: { value: 1.0 },
-        uRingColor1: { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
-        uRingColor2: { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
-      },
-      transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.1);
     const glowMult = cfg.style.glowIntensity;
@@ -177,32 +130,6 @@ export function CentralStar({
       atmosphereMaterial.needsUpdate = true;
     }
 
-    // ---- Update rings ----
-    const rc1 = new THREE.Color(cfg.colorTheme.coronaInner);
-    const rc2 = new THREE.Color(cfg.colorTheme.coronaOuter);
-    ringMaterial.uniforms.uTime.value = time;
-    ringMaterial.uniforms.uAnimSpeed.value = cfg.style.animationSpeed;
-    ringMaterial.uniforms.uIsDark.value = darkVal;
-    ringMaterial.uniforms.uRingColor1.value.set(rc1.r, rc1.g, rc1.b);
-    ringMaterial.uniforms.uRingColor2.value.set(rc2.r, rc2.g, rc2.b);
-
-    ring2Material.uniforms.uTime.value = time;
-    ring2Material.uniforms.uAnimSpeed.value = cfg.style.animationSpeed * 0.7;
-    ring2Material.uniforms.uIsDark.value = darkVal;
-    ring2Material.uniforms.uRingColor1.value.set(rc2.r, rc2.g, rc2.b);
-    ring2Material.uniforms.uRingColor2.value.set(rc1.r, rc1.g, rc1.b);
-
-    // Switch ring blending
-    const ringBlending = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
-    if (ringMaterial.blending !== ringBlending) {
-      ringMaterial.blending = ringBlending;
-      ringMaterial.needsUpdate = true;
-    }
-    if (ring2Material.blending !== ringBlending) {
-      ring2Material.blending = ringBlending;
-      ring2Material.needsUpdate = true;
-    }
-
     // Slow rotation
     if (groupRef.current) {
       groupRef.current.rotation.y += dt * 0.08;
@@ -233,17 +160,6 @@ export function CentralStar({
       <mesh material={atmosphereMaterial}>
         <sphereGeometry args={[R * 1.05, 64, 32]} />
       </mesh>
-
-      {/* Primary accretion disk */}
-      <mesh material={ringMaterial} rotation={[Math.PI * 0.42, 0, 0]}>
-        <ringGeometry args={[HERO_RING_INNER, HERO_RING_OUTER, 128, 1]} />
-      </mesh>
-
-      {/* Secondary offset ring for depth */}
-      <mesh material={ring2Material} rotation={[Math.PI * 0.48, 0.15, 0]}>
-        <ringGeometry args={[HERO_RING_INNER * 0.9, HERO_RING_OUTER * 0.85, 128, 1]} />
-      </mesh>
-
     </group>
   );
 }
