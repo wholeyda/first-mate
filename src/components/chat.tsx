@@ -374,15 +374,15 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
 
       {/* Content overlay on top of globe */}
       <div className="relative z-10 flex flex-col h-full pointer-events-none">
-        {/* Scrollable messages area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 pointer-events-auto">
-          {/* Spacer to push messages below the globe center */}
+        {/* Scrollable messages area — pointer-events-none so globe stays clickable */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+          {/* Spacer to push messages below the globe center — clicks pass through */}
           <div className="min-h-[60vh]" />
 
-          {/* Last assistant response only */}
-          <div className="flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full">
+          {/* Last assistant response only — only text gets pointer events */}
+          <div className="flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full pointer-events-auto">
           {displayMessages.length === 0 && !isLoading && (
-            <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-4">
+            <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-4 pointer-events-none">
               What would you like to accomplish?
             </p>
           )}
