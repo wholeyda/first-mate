@@ -381,12 +381,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
 
           {/* Last assistant response only — only text gets pointer events */}
           <div className="flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full pointer-events-auto">
-          {displayMessages.length === 0 && !isLoading && (
-            <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-4 pointer-events-none">
-              What would you like to accomplish?
-            </p>
-          )}
-
           <div className="space-y-5">
             {displayMessages.map((item) => (
               <div
