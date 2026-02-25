@@ -52,3 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_blocks_status ON scheduled_blocks(statu
 -- 7. Add star_preferences JSONB column to users table (for star customization)
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS star_preferences JSONB DEFAULT NULL;
+
+-- 8. Add has_seen_onboarding flag to users table (for instructions modal)
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS has_seen_onboarding BOOLEAN DEFAULT false;

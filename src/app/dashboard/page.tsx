@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/sign-out-button";
 import { DarkModeToggle } from "@/components/dark-mode-toggle";
+import { InstructionsButton } from "@/components/instructions-button";
 import { DashboardClient } from "@/components/dashboard-client";
 
 export default async function DashboardPage() {
@@ -52,6 +53,14 @@ export default async function DashboardPage() {
     subGoals = subs || [];
   }
 
+  // Fetch onboarding status (auto-open instructions for new users)
+  const { data: userProfile } = await supabase
+    .from("users")
+    .select("has_seen_onboarding")
+    .eq("id", user.id)
+    .single();
+  const hasSeenOnboarding = userProfile?.has_seen_onboarding ?? false;
+
   return (
     <div className="h-screen bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* Top bar */}
@@ -60,6 +69,7 @@ export default async function DashboardPage() {
           <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">First Mate</h1>
           <div className="flex items-center gap-4">
             <span className="text-gray-400 dark:text-gray-500 text-sm">{user.email}</span>
+            <InstructionsButton />
             <DarkModeToggle />
             <SignOutButton />
           </div>
@@ -71,6 +81,7 @@ export default async function DashboardPage() {
         initialGoals={goals || []}
         initialSubGoals={subGoals}
         completedGoalCount={completedCount || 0}
+        hasSeenOnboarding={hasSeenOnboarding}
       />
     </div>
   );

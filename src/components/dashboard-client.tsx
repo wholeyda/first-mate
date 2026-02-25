@@ -15,6 +15,7 @@ import { ResumePanel } from "@/components/resume-panel";
 import { AeiouModal } from "@/components/aeiou-modal";
 import { IslandReveal } from "@/components/island-reveal";
 import { StarCustomizationPanel } from "@/components/star-customization-panel";
+import { InstructionsModal } from "@/components/instructions-modal";
 import { ParsedGoal } from "@/lib/parse-goal";
 import { Goal, Island } from "@/types/database";
 import { StarConfig, DEFAULT_STAR_CONFIG } from "@/types/star-config";
@@ -28,11 +29,12 @@ interface DashboardClientProps {
   initialGoals: Goal[];
   initialSubGoals?: Array<Record<string, unknown>>;
   completedGoalCount?: number;
+  hasSeenOnboarding?: boolean;
 }
 
 type Tab = "chat" | "calendar" | "resume";
 
-export function DashboardClient({ initialGoals, initialSubGoals = [], completedGoalCount = 0 }: DashboardClientProps) {
+export function DashboardClient({ initialGoals, initialSubGoals = [], completedGoalCount = 0, hasSeenOnboarding = true }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
   const [subGoals, setSubGoals] = useState<Array<Record<string, unknown>>>(initialSubGoals);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
@@ -47,6 +49,30 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const [starConfig, setStarConfig] = useState<StarConfig>(DEFAULT_STAR_CONFIG);
   const [savedStarConfig, setSavedStarConfig] = useState<StarConfig>(DEFAULT_STAR_CONFIG);
   const [isCustomizingStar, setIsCustomizingStar] = useState(false);
+
+  // Instructions modal state — auto-open for new users
+  const [showInstructions, setShowInstructions] = useState(!hasSeenOnboarding);
+
+  // Listen for "open-instructions" custom event from the header InstructionsButton
+  useEffect(() => {
+    function handleOpenInstructions() {
+      setShowInstructions(true);
+    }
+    window.addEventListener("open-instructions", handleOpenInstructions);
+    return () => window.removeEventListener("open-instructions", handleOpenInstructions);
+  }, []);
+
+  // Mark onboarding as seen when the modal is closed
+  async function handleInstructionsClose() {
+    setShowInstructions(false);
+    if (!hasSeenOnboarding) {
+      try {
+        await fetch("/api/onboarding", { method: "PUT" });
+      } catch {
+        // Silent fail — onboarding will just reopen next visit
+      }
+    }
+  }
 
   // Initialize notifications on mount
   useEffect(() => {
@@ -292,6 +318,12 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
           onClose={() => setRevealIsland(null)}
         />
       )}
+
+      {/* Instructions / Onboarding Modal */}
+      <InstructionsModal
+        isOpen={showInstructions}
+        onClose={handleInstructionsClose}
+      />
 
       {/* Star Customization Panel */}
       <StarCustomizationPanel

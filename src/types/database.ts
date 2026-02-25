@@ -18,6 +18,7 @@ export interface User {
   spotify_refresh_token: string | null;
   spotify_token_expires_at: string | null;
   star_preferences: StarConfig | null;
+  has_seen_onboarding: boolean;
   created_at: string;
 }
 
