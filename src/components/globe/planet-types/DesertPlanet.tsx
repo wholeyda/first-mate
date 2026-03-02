@@ -22,6 +22,7 @@ export function DesertPlanet({ colors }: Props) {
       atmosphereTint="#D4A574"
       glowIntensity={0.7}
       hasRings
+      ringTilt={[Math.PI * 0.42, 0, 0]}
       ringColor={colors[1] || "#C8956E"}
       ringSecondaryColor="#E8C89E"
     />

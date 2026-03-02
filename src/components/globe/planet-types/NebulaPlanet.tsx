@@ -32,6 +32,7 @@ export function NebulaPlanet({ colors }: Props) {
       glowIntensity={glowRef.current}
       scale={1.15}
       hasRings
+      ringTilt={[Math.PI * 0.15, 0, Math.PI * 0.3]}
       ringColor={colors[0] || "#9B59B6"}
       ringSecondaryColor={colors[2] || "#D4A5FF"}
     />

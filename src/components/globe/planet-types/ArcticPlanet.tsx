@@ -22,6 +22,7 @@ export function ArcticPlanet({ colors }: Props) {
       atmosphereTint="#A0D4FF"
       glowIntensity={1.0}
       hasRings
+      ringTilt={[Math.PI * 0.5, Math.PI * 0.25, 0]}
       ringColor="#CCE5FF"
       ringSecondaryColor="#FFFFFF"
     />

@@ -183,10 +183,12 @@ export function RecommendationsPanel({ maxItems = 4 }: { maxItems?: number }) {
         <button
           onClick={handleRefresh}
           disabled={isLoading}
-          className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer text-xs"
+          className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors cursor-pointer"
           title="Refresh recommendations"
         >
-          &orarr;
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0115.4-4.6L20 5M20 15a9 9 0 01-15.4 4.6L4 19" />
+          </svg>
         </button>
       </div>
       <div className="space-y-3">

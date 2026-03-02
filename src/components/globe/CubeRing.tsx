@@ -26,8 +26,8 @@ interface CubeRingProps {
   color1: string;
   /** Secondary ring color */
   color2: string;
-  /** Ring tilt in radians */
-  tilt?: number;
+  /** Ring tilt as [x, y, z] euler rotation in radians */
+  tilt?: [number, number, number];
   /** Animation speed multiplier */
   speed?: number;
 }
@@ -42,7 +42,7 @@ export function CubeRing({
   cubeSize = 0.04,
   color1,
   color2,
-  tilt = Math.PI * 0.42,
+  tilt = [Math.PI * 0.42, 0, 0],
   speed = 1.0,
 }: CubeRingProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -125,7 +125,7 @@ export function CubeRing({
   });
 
   return (
-    <group rotation={[tilt, 0, 0]}>
+    <group rotation={tilt}>
       <instancedMesh
         ref={meshRef}
         args={[undefined, undefined, count]}

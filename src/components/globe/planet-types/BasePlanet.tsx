@@ -50,6 +50,8 @@ export interface BasePlanetProps {
   ringSecondaryColor?: string;
   /** Noise animation speed multiplier (default 1.0) */
   animationSpeed?: number;
+  /** Ring tilt as [x, y, z] euler rotation in radians */
+  ringTilt?: [number, number, number];
 }
 
 export function BasePlanet({
@@ -67,6 +69,7 @@ export function BasePlanet({
   ringColor,
   ringSecondaryColor,
   animationSpeed = 1.0,
+  ringTilt,
 }: BasePlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
   const radius = PLANET_RADIUS * scale;
@@ -176,6 +179,7 @@ export function BasePlanet({
           color1={ringC1}
           color2={ringC2}
           speed={animationSpeed}
+          tilt={ringTilt}
         />
       )}
 
