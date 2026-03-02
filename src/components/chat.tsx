@@ -585,7 +585,9 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   const inVoiceMode = voiceState !== "idle";
 
   return (
-    <div className="relative flex flex-col h-full bg-white dark:bg-gray-950 overflow-hidden">
+    <div className={`relative flex flex-col h-full overflow-hidden transition-colors duration-500 ${
+      inVoiceMode ? "bg-black" : "bg-white dark:bg-gray-950"
+    }`}>
       {/* Globe — absolute background filling the entire panel */}
       <div className="absolute inset-0 z-0">
         <Globe
@@ -595,6 +597,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           starConfig={starConfig}
           onStarClick={onStarClick}
           voiceAmplitude={currentAmplitude}
+          voiceMode={inVoiceMode}
         />
       </div>
 
@@ -603,8 +606,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         <div className={`absolute inset-0 z-20 flex flex-col items-center justify-end pb-8 transition-opacity duration-500 ${
           inVoiceMode ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}>
-          {/* Dark overlay background — lets planet show through */}
-          <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
+          {/* No background div needed — parent container is already black in voice mode */}
 
           {/* Status + controls */}
           <div className="relative z-10 flex flex-col items-center gap-4">

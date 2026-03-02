@@ -63,6 +63,7 @@ interface SceneProps {
   onStarClick?: () => void;
   isDark: boolean;
   voiceAmplitude?: number;
+  voiceMode?: boolean;
 }
 
 // ---- Planet type renderer (inline to avoid import cycle) ----
@@ -172,7 +173,7 @@ function CentralStarAnimated({
 }
 
 // ---- Main scene (inside Canvas) ----
-function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDark, voiceAmplitude = 0 }: SceneProps) {
+function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDark, voiceAmplitude = 0, voiceMode = false }: SceneProps) {
   const angleRef = useRef(0);
   const speedRef = useRef(IDLE_SPEED);
   const activeIntensityRef = useRef(0);
@@ -210,8 +211,8 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDa
           voiceAmplitude={voiceAmplitude}
         />
 
-        {/* Orbit path lines */}
-        {orbitPaths.map(({ id, points }) => (
+        {/* Orbit path lines — hidden in voice mode */}
+        {!voiceMode && orbitPaths.map(({ id, points }) => (
           <Line
             key={`orbit-${id}`}
             points={points}
@@ -222,8 +223,8 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDa
           />
         ))}
 
-        {/* Orbiting planets */}
-        {islands.map((island) => (
+        {/* Orbiting planets — hidden in voice mode */}
+        {!voiceMode && islands.map((island) => (
           <OrbitingPlanet
             key={island.id}
             island={island}
@@ -232,8 +233,8 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDa
           />
         ))}
 
-        {/* Rocket ships flying between planets */}
-        {islands.length >= 2 && (
+        {/* Rocket ships flying between planets — hidden in voice mode */}
+        {!voiceMode && islands.length >= 2 && (
           <RocketFleet islands={islands} angleRef={angleRef} />
         )}
 
@@ -262,6 +263,7 @@ export function Globe3DCanvas({
   starConfig,
   onStarClick,
   voiceAmplitude = 0,
+  voiceMode = false,
 }: Omit<SceneProps, "isDark">) {
   // Read theme from app-level context (outside Canvas)
   const { isDark } = useTheme();
@@ -285,8 +287,8 @@ export function Globe3DCanvas({
         }}
       >
         <Suspense fallback={null}>
-          {/* Background starfield — only in dark mode */}
-          {isDark && (
+          {/* Background starfield — only in dark mode, hidden in voice mode */}
+          {isDark && !voiceMode && (
             <Stars
               radius={50}
               depth={50}
@@ -307,6 +309,7 @@ export function Globe3DCanvas({
             onStarClick={onStarClick}
             isDark={isDark}
             voiceAmplitude={voiceAmplitude}
+            voiceMode={voiceMode}
           />
 
           {/* Post-processing — reduced bloom in light mode */}

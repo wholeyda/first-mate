@@ -25,6 +25,7 @@ interface GlobeProps {
   starConfig?: StarConfig;
   onStarClick?: () => void;
   voiceAmplitude?: number;
+  voiceMode?: boolean;
 }
 
 const Globe3DCanvas = dynamic(
@@ -32,7 +33,7 @@ const Globe3DCanvas = dynamic(
   { ssr: false }
 );
 
-export function Globe({ isActive, islands = [], onIslandClick, starConfig, onStarClick, voiceAmplitude = 0 }: GlobeProps) {
+export function Globe({ isActive, islands = [], onIslandClick, starConfig, onStarClick, voiceAmplitude = 0, voiceMode = false }: GlobeProps) {
   return (
     <Suspense
       fallback={
@@ -48,6 +49,7 @@ export function Globe({ isActive, islands = [], onIslandClick, starConfig, onSta
         starConfig={starConfig}
         onStarClick={onStarClick}
         voiceAmplitude={voiceAmplitude}
+        voiceMode={voiceMode}
       />
     </Suspense>
   );

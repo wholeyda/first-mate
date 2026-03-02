@@ -134,8 +134,9 @@ export function CentralStar({
     }
 
     // Voice amplitude → scale animation (smooth lerp)
-    const targetScale = 1.0 + voiceAmplitude * 0.3;
-    scaleRef.current += (targetScale - scaleRef.current) * 0.15;
+    // Boost amplitude significantly so the planet visibly grows/shrinks
+    const targetScale = 1.0 + voiceAmplitude * 1.5;
+    scaleRef.current += (targetScale - scaleRef.current) * 0.12;
 
     // Slow rotation + scale
     if (groupRef.current) {
