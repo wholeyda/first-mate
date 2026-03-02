@@ -617,9 +617,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   const effectiveAmplitude = Math.max(currentAmplitude, voiceModeBaseAmplitude);
 
   return (
-    <div className={`relative flex flex-col h-full overflow-hidden transition-colors duration-500 ${
-      inVoiceMode ? "bg-black" : "bg-white dark:bg-gray-950"
-    }`}>
+    <div className="relative flex flex-col h-full overflow-hidden bg-black">
       {/* Globe — absolute background filling the entire panel */}
       <div className="absolute inset-0 z-0">
         <Globe
@@ -694,7 +692,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                 key={`msg-${item.originalIndex}`}
                 className="chat-message-fade"
               >
-                <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
+                <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
                   {item.message.content}
                 </p>
                 {isScheduling && (
@@ -717,7 +715,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                 key={reply}
                 type="button"
                 onClick={() => handleQuickReply(reply)}
-                className="px-4 py-1.5 text-sm rounded-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors cursor-pointer"
+                className="px-4 py-1.5 text-sm rounded-full border border-white/15 bg-white/8 text-gray-300 hover:bg-white/15 hover:border-white/25 transition-colors cursor-pointer"
               >
                 {reply}
               </button>
@@ -730,7 +728,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               type="button"
               onClick={handleClear}
               onBlur={() => setShowClearConfirm(false)}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors cursor-pointer whitespace-nowrap self-center"
+              className="text-xs text-gray-600 hover:text-red-400 transition-colors cursor-pointer whitespace-nowrap self-center"
             >
               {showClearConfirm ? "Clear all?" : "\u00D7"}
             </button>
@@ -742,13 +740,13 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
             onKeyDown={handleKeyDown}
             placeholder="Tell me what you want to accomplish..."
             rows={1}
-            className="flex-1 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 text-sm max-h-32 bg-white dark:bg-gray-900"
+            className="flex-1 border border-white/10 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-600 resize-none focus:outline-none focus:border-white/20 text-sm max-h-32 bg-white/5"
             disabled={isLoading || inVoiceMode}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white dark:text-gray-900 font-medium px-5 py-3 rounded-xl transition-colors text-sm cursor-pointer"
+            className="bg-white/90 hover:bg-white disabled:bg-white/20 disabled:cursor-not-allowed text-gray-900 font-medium px-5 py-3 rounded-xl transition-colors text-sm cursor-pointer"
           >
             Send
           </button>
@@ -756,7 +754,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           <button
             type="button"
             onClick={handleTalkClick}
-            className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 px-3 py-3 rounded-xl transition-colors cursor-pointer"
+            className="bg-white/10 hover:bg-white/20 text-gray-400 px-3 py-3 rounded-xl transition-colors cursor-pointer"
             title="Talk to First Mate"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

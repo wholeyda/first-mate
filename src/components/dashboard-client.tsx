@@ -45,6 +45,7 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [localCompletedCount, setLocalCompletedCount] = useState(completedGoalCount);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Star customization state
   const [starConfig, setStarConfig] = useState<StarConfig>(DEFAULT_STAR_CONFIG);
@@ -250,8 +251,8 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
   const activeGoals = goals.filter((g) => g.status === "active");
 
   return (
-    <div className="flex flex-1 overflow-hidden w-full">
-      {/* Main content area */}
+    <div className="flex flex-1 overflow-hidden w-full relative">
+      {/* Main content area — always full width */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Tab bar */}
         <div className="flex items-center justify-between px-4 pt-2 border-b border-gray-100 dark:border-gray-800">
@@ -272,13 +273,26 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
               </button>
             ))}
           </div>
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer px-2 py-1"
-            title="Reset all First Mate data"
-          >
-            Reset All
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Goals sidebar toggle */}
+            <button
+              onClick={() => setSidebarOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors cursor-pointer px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              title="Toggle goals sidebar"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+              </svg>
+              <span>Goals</span>
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer px-2 py-1"
+              title="Reset all First Mate data"
+            >
+              Reset All
+            </button>
+          </div>
         </div>
 
         {/* Tab content */}
@@ -291,14 +305,36 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         </div>
       </div>
 
-      {/* Goals sidebar */}
-      <GoalsSidebar
-        goals={activeGoals}
-        subGoals={subGoals}
-        onGoalDeleted={handleGoalDeleted}
-        onGoalComplete={handleGoalCompleted}
-        onSubGoalStatusChange={handleSubGoalStatusChange}
-      />
+      {/* Backdrop — tap to close sidebar on mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Goals sidebar — slides in from right as an overlay */}
+      <div className={`fixed top-0 right-0 h-full z-40 w-80 sm:w-96 transform transition-transform duration-300 ease-in-out ${
+        sidebarOpen ? "translate-x-0" : "translate-x-full"
+      }`}>
+        {/* Close button inside sidebar */}
+        <button
+          onClick={() => setSidebarOpen(false)}
+          className="absolute top-4 left-[-40px] z-50 w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-md text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors cursor-pointer"
+          title="Close sidebar"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <GoalsSidebar
+          goals={activeGoals}
+          subGoals={subGoals}
+          onGoalDeleted={handleGoalDeleted}
+          onGoalComplete={handleGoalCompleted}
+          onSubGoalStatusChange={handleSubGoalStatusChange}
+        />
+      </div>
 
       {/* AEIOU Completion Modal */}
       {completingGoal && (
