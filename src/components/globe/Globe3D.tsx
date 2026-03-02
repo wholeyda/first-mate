@@ -62,6 +62,7 @@ interface SceneProps {
   starConfig?: StarConfig;
   onStarClick?: () => void;
   isDark: boolean;
+  voiceAmplitude?: number;
 }
 
 // ---- Planet type renderer (inline to avoid import cycle) ----
@@ -143,15 +144,18 @@ function CentralStarAnimated({
   activeIntensityRef,
   starConfig,
   onStarClick,
+  voiceAmplitude = 0,
 }: {
   activeIntensityRef: React.MutableRefObject<number>;
   starConfig?: StarConfig;
   onStarClick?: () => void;
+  voiceAmplitude?: number;
 }) {
   const [intensity, setIntensity] = useState(0);
 
   useFrame(() => {
-    const current = activeIntensityRef.current;
+    // Use voice amplitude if active, otherwise fall back to chat active intensity
+    const current = voiceAmplitude > 0.01 ? voiceAmplitude : activeIntensityRef.current;
     if (Math.abs(current - intensity) > 0.02) {
       setIntensity(current);
     }
@@ -162,12 +166,13 @@ function CentralStarAnimated({
       activeIntensity={intensity}
       config={starConfig}
       onStarClick={onStarClick}
+      voiceAmplitude={voiceAmplitude}
     />
   );
 }
 
 // ---- Main scene (inside Canvas) ----
-function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDark }: SceneProps) {
+function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDark, voiceAmplitude = 0 }: SceneProps) {
   const angleRef = useRef(0);
   const speedRef = useRef(IDLE_SPEED);
   const activeIntensityRef = useRef(0);
@@ -202,6 +207,7 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDa
           activeIntensityRef={activeIntensityRef}
           starConfig={starConfig}
           onStarClick={onStarClick}
+          voiceAmplitude={voiceAmplitude}
         />
 
         {/* Orbit path lines */}
@@ -255,6 +261,7 @@ export function Globe3DCanvas({
   onIslandClick,
   starConfig,
   onStarClick,
+  voiceAmplitude = 0,
 }: Omit<SceneProps, "isDark">) {
   // Read theme from app-level context (outside Canvas)
   const { isDark } = useTheme();
@@ -299,6 +306,7 @@ export function Globe3DCanvas({
             starConfig={starConfig}
             onStarClick={onStarClick}
             isDark={isDark}
+            voiceAmplitude={voiceAmplitude}
           />
 
           {/* Post-processing — reduced bloom in light mode */}

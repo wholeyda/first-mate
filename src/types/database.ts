@@ -19,6 +19,7 @@ export interface User {
   spotify_token_expires_at: string | null;
   star_preferences: StarConfig | null;
   has_seen_onboarding: boolean;
+  voice_preference: "male" | "female" | null;
   created_at: string;
 }
 

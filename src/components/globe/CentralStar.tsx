@@ -35,14 +35,17 @@ interface HeroPlanetProps {
   activeIntensity: number;
   config?: StarConfig;
   onStarClick?: () => void;
+  voiceAmplitude?: number;
 }
 
 export function CentralStar({
   activeIntensity,
   config,
   onStarClick,
+  voiceAmplitude = 0,
 }: HeroPlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const scaleRef = useRef(1.0);
   const isDark = useSceneTheme();
 
   const cfg = config ?? DEFAULT_STAR_CONFIG;
@@ -130,9 +133,15 @@ export function CentralStar({
       atmosphereMaterial.needsUpdate = true;
     }
 
-    // Slow rotation
+    // Voice amplitude → scale animation (smooth lerp)
+    const targetScale = 1.0 + voiceAmplitude * 0.3;
+    scaleRef.current += (targetScale - scaleRef.current) * 0.15;
+
+    // Slow rotation + scale
     if (groupRef.current) {
       groupRef.current.rotation.y += dt * 0.08;
+      const s = scaleRef.current;
+      groupRef.current.scale.set(s, s, s);
     }
   });
 

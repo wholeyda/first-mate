@@ -56,3 +56,7 @@ ADD COLUMN IF NOT EXISTS star_preferences JSONB DEFAULT NULL;
 -- 8. Add has_seen_onboarding flag to users table (for instructions modal)
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS has_seen_onboarding BOOLEAN DEFAULT false;
+
+-- 9. Add voice_preference column to users table (for TTS voice selection)
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS voice_preference TEXT DEFAULT 'female' CHECK (voice_preference IN ('male', 'female'));

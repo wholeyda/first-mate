@@ -5,16 +5,21 @@
  * Shows only the last assistant message.
  * The globe serves as both visual centerpiece and loading indicator.
  * Planets orbit the globe — clicking one opens a branded removal modal.
+ *
+ * Voice mode: Hold the Talk button for 1.5s to enter/exit voice mode.
+ * In voice mode, the UI fades out leaving only the planet, which reacts
+ * to audio amplitude from mic (listening) or TTS playback (speaking).
  */
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { parseGoalsFromResponse, stripGoalJson, ParsedGoal } from "@/lib/parse-goal";
 import { Globe } from "@/components/globe";
 import { PlanetRemoveModal } from "@/components/planet-remove-modal";
 import { Island } from "@/types/database";
 import { StarConfig } from "@/types/star-config";
+import { useDeepgramSTT } from "@/hooks/useDeepgramSTT";
 
 interface Message {
   role: "user" | "assistant";
@@ -37,57 +42,34 @@ interface ChatProps {
   onStarClick?: () => void;
 }
 
+type VoiceState = "idle" | "activating" | "listening" | "processing" | "speaking";
+
+const HOLD_DURATION = 1500; // ms to hold before activating/deactivating
+
 /**
  * Detect what kind of quick replies to show based on assistant message content.
- * Returns an array of suggested reply strings, or empty array for no suggestions.
  */
 function detectQuickReplies(text: string): string[] {
   const lower = text.toLowerCase();
 
-  // Frequency-related
-  if (
-    /how often|frequency|how frequently|recurring|repeat|recurrence/.test(lower)
-  ) {
+  if (/how often|frequency|how frequently|recurring|repeat|recurrence/.test(lower)) {
     return ["Daily", "Weekly", "Monthly"];
   }
-
-  // Time/duration-related
-  if (
-    /how long|how much time|duration|how many hours|how many minutes|per session|each session/.test(lower)
-  ) {
+  if (/how long|how much time|duration|how many hours|how many minutes|per session|each session/.test(lower)) {
     return ["30 min", "1 hour", "2 hours"];
   }
-
-  // Priority-related
-  if (
-    /priority|how important|urgency|how urgent|critical/.test(lower) &&
-    /\?/.test(lower)
-  ) {
+  if (/priority|how important|urgency|how urgent|critical/.test(lower) && /\?/.test(lower)) {
     return ["Low", "Medium", "High", "Critical"];
   }
-
-  // Work vs personal
-  if (
-    /work or personal|personal or work|which calendar|work calendar|personal calendar/.test(lower)
-  ) {
+  if (/work or personal|personal or work|which calendar|work calendar|personal calendar/.test(lower)) {
     return ["Work", "Personal"];
   }
-
-  // Deadline flexibility
-  if (
-    /hard deadline|flexible|move the date|deadline.*flex|firm.*deadline|fixed.*deadline/.test(lower) &&
-    /\?/.test(lower)
-  ) {
+  if (/hard deadline|flexible|move the date|deadline.*flex|firm.*deadline|fixed.*deadline/.test(lower) && /\?/.test(lower)) {
     return ["Hard deadline", "Flexible"];
   }
-
-  // Time of day
-  if (
-    /what time of day|morning or|afternoon or|evening|prefer.*morning|prefer.*afternoon|when.*during the day/.test(lower)
-  ) {
+  if (/what time of day|morning or|afternoon or|evening|prefer.*morning|prefer.*afternoon|when.*during the day/.test(lower)) {
     return ["Morning", "Afternoon", "Evening"];
   }
-
   return [];
 }
 
@@ -101,6 +83,49 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ---- Voice mode state ----
+  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [voicePreference, setVoicePreference] = useState<"male" | "female">("female");
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [ttsAmplitude, setTtsAmplitude] = useState(0);
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const holdStartRef = useRef<number>(0);
+  const holdAnimRef = useRef<number>(0);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsAnalyserRef = useRef<AnalyserNode | null>(null);
+  const ttsContextRef = useRef<AudioContext | null>(null);
+  const ttsAnimRef = useRef<number>(0);
+
+  const {
+    startListening,
+    stopListening,
+    transcript,
+    isListening,
+    audioAmplitude: micAmplitude,
+    error: sttError,
+  } = useDeepgramSTT();
+
+  // Determine the current amplitude to drive the planet
+  const currentAmplitude = voiceState === "listening" ? micAmplitude
+    : voiceState === "speaking" ? ttsAmplitude
+    : 0;
+
+  // Fetch voice preference on mount
+  useEffect(() => {
+    async function fetchPref() {
+      try {
+        const res = await fetch("/api/voice-preference");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.voicePreference) setVoicePreference(data.voicePreference);
+        }
+      } catch {
+        // Use default
+      }
+    }
+    fetchPref();
+  }, []);
 
   // Auto-scroll to bottom when messages change or loading state changes
   useEffect(() => {
@@ -143,7 +168,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   function handleQuickReply(reply: string) {
     setInput(reply);
     setQuickReplies([]);
-    // Submit on next tick so the input state is updated
     setTimeout(() => {
       const form = inputRef.current?.closest("form");
       if (form) {
@@ -152,11 +176,11 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     }, 0);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  // ---- Core chat submission (shared by text + voice) ----
+  const sendMessage = useCallback(async (text: string, fromVoice: boolean = false) => {
+    if (!text.trim() || isLoading) return;
 
-    const userMessage: Message = { role: "user", content: input.trim() };
+    const userMessage: Message = { role: "user", content: text.trim() };
     const updatedMessages = [...messages, userMessage];
 
     setMessages(updatedMessages);
@@ -164,8 +188,13 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     setIsLoading(true);
     setQuickReplies([]);
 
+    if (fromVoice) {
+      setVoiceState("processing");
+    }
+
+    let assistantContent = "";
+
     try {
-      // Send messages to the chat API
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -174,12 +203,9 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
 
       if (!response.ok) throw new Error("Chat request failed");
 
-      // Stream the response
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let assistantContent = "";
 
-      // Add empty assistant message that we'll stream into
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
       while (reader) {
@@ -214,12 +240,12 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         }
       }
 
-      // After streaming completes, detect quick replies from the assistant content
+      // Detect quick replies
       const cleanedForDetection = stripGoalJson(assistantContent);
       const detectedReplies = detectQuickReplies(cleanedForDetection);
       setQuickReplies(detectedReplies);
 
-      // Check if the response contains goal JSON
+      // Check for goal JSON
       const goals = parseGoalsFromResponse(assistantContent);
       if (goals.length > 0 && onGoalCreated) {
         setIsScheduling(true);
@@ -267,8 +293,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     role: "assistant",
-                    content: updated[updated.length - 1].content +
-                      `\n\n${statusMsg}`,
+                    content: updated[updated.length - 1].content + `\n\n${statusMsg}`,
                   };
                   return updated;
                 });
@@ -277,8 +302,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     role: "assistant",
-                    content: updated[updated.length - 1].content +
-                      `\n\n(${savedData.schedulingError})`,
+                    content: updated[updated.length - 1].content + `\n\n(${savedData.schedulingError})`,
                   };
                   return updated;
                 });
@@ -310,7 +334,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         setIsScheduling(false);
       }
 
-      // Clean the displayed message (remove JSON blocks)
+      // Clean displayed message
       const cleanContent = stripGoalJson(assistantContent);
       if (cleanContent !== assistantContent) {
         setMessages((prev) => {
@@ -322,18 +346,31 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           return updated;
         });
       }
+
+      // If in voice mode, play TTS
+      if (fromVoice && cleanContent) {
+        await playTTS(cleanContent);
+      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: "Sorry, I hit a snag. Try again?",
-        },
+        { role: "assistant", content: "Sorry, I hit a snag. Try again?" },
       ]);
+      if (fromVoice) {
+        setVoiceState("listening");
+        startListening();
+      }
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, isLoading, onGoalCreated]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+    sendMessage(input.trim());
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -359,6 +396,160 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     onHistoryCleared?.();
   }
 
+  // ---- TTS Playback ----
+  async function playTTS(text: string) {
+    setVoiceState("speaking");
+    try {
+      const res = await fetch("/api/voice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: voicePreference }),
+      });
+
+      if (!res.ok) throw new Error("TTS failed");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+
+      // Set up AudioContext + AnalyserNode for TTS amplitude
+      const audioCtx = new AudioContext();
+      ttsContextRef.current = audioCtx;
+      const source = audioCtx.createMediaElementSource(audio);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      ttsAnalyserRef.current = analyser;
+
+      // Start TTS amplitude monitoring
+      function updateTtsAmplitude() {
+        if (!ttsAnalyserRef.current) return;
+        const data = new Uint8Array(ttsAnalyserRef.current.frequencyBinCount);
+        ttsAnalyserRef.current.getByteFrequencyData(data);
+        const sum = data.reduce((a, b) => a + b, 0);
+        const avg = sum / data.length / 255;
+        setTtsAmplitude(avg);
+        ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
+      }
+      ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
+
+      audio.onended = () => {
+        // Cleanup TTS audio resources
+        cancelAnimationFrame(ttsAnimRef.current);
+        setTtsAmplitude(0);
+        URL.revokeObjectURL(url);
+        if (ttsContextRef.current && ttsContextRef.current.state !== "closed") {
+          ttsContextRef.current.close();
+        }
+        ttsContextRef.current = null;
+        ttsAnalyserRef.current = null;
+        ttsAudioRef.current = null;
+
+        // Go back to listening
+        setVoiceState("listening");
+        startListening();
+      };
+
+      await audio.play();
+    } catch (err) {
+      console.error("TTS playback error:", err);
+      // Fall back to text display, go back to listening
+      setVoiceState("listening");
+      startListening();
+    }
+  }
+
+  // ---- Hold-to-activate gesture ----
+  function handleTalkPointerDown() {
+    holdStartRef.current = Date.now();
+    setHoldProgress(0);
+
+    // Animate progress
+    function animateProgress() {
+      const elapsed = Date.now() - holdStartRef.current;
+      const progress = Math.min(elapsed / HOLD_DURATION, 1);
+      setHoldProgress(progress);
+
+      if (progress < 1) {
+        holdAnimRef.current = requestAnimationFrame(animateProgress);
+      }
+    }
+    holdAnimRef.current = requestAnimationFrame(animateProgress);
+
+    holdTimerRef.current = setTimeout(() => {
+      setHoldProgress(0);
+      if (voiceState === "idle") {
+        // Activate voice mode
+        setVoiceState("listening");
+        startListening();
+      } else if (voiceState === "listening") {
+        // Deactivate → send transcript
+        const finalText = stopListening();
+        if (finalText.trim()) {
+          sendMessage(finalText.trim(), true);
+        } else {
+          setVoiceState("listening");
+          startListening();
+        }
+      }
+    }, HOLD_DURATION);
+  }
+
+  function handleTalkPointerUp() {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    cancelAnimationFrame(holdAnimRef.current);
+    setHoldProgress(0);
+  }
+
+  // Exit voice mode
+  function exitVoiceMode() {
+    // Stop STT
+    if (isListening) stopListening();
+
+    // Stop TTS
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+    if (ttsAnimRef.current) cancelAnimationFrame(ttsAnimRef.current);
+    if (ttsContextRef.current && ttsContextRef.current.state !== "closed") {
+      ttsContextRef.current.close();
+    }
+    ttsContextRef.current = null;
+    ttsAnalyserRef.current = null;
+    setTtsAmplitude(0);
+    setVoiceState("idle");
+  }
+
+  // Save voice preference
+  async function toggleVoicePreference() {
+    const newPref = voicePreference === "female" ? "male" : "female";
+    setVoicePreference(newPref);
+    try {
+      await fetch("/api/voice-preference", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voicePreference: newPref }),
+      });
+    } catch {
+      // Silent fail
+    }
+  }
+
+  const voiceStatusLabel =
+    voiceState === "listening" ? "Listening..."
+    : voiceState === "processing" ? "Thinking..."
+    : voiceState === "speaking" ? "Speaking..."
+    : voiceState === "activating" ? "Hold..."
+    : "";
+
+  const inVoiceMode = voiceState !== "idle";
+
   return (
     <div className="relative flex flex-col h-full bg-white dark:bg-gray-950 overflow-hidden">
       {/* Globe — absolute background filling the entire panel */}
@@ -369,17 +560,98 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           onIslandClick={handlePlanetClick}
           starConfig={starConfig}
           onStarClick={onStarClick}
+          voiceAmplitude={currentAmplitude}
         />
       </div>
 
-      {/* Content overlay on top of globe */}
-      <div className="relative z-10 flex flex-col h-full pointer-events-none">
-        {/* Scrollable messages area — pointer-events-none so globe stays clickable */}
+      {/* Voice mode overlay */}
+      {inVoiceMode && (
+        <div className={`absolute inset-0 z-20 flex flex-col items-center justify-end pb-8 transition-opacity duration-500 ${
+          inVoiceMode ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}>
+          {/* Dark overlay background — lets planet show through */}
+          <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
+
+          {/* Status + controls */}
+          <div className="relative z-10 flex flex-col items-center gap-6">
+            {/* Live transcript preview */}
+            {voiceState === "listening" && transcript && (
+              <div className="max-w-md px-6 py-3 bg-black/30 rounded-xl backdrop-blur-sm">
+                <p className="text-white/80 text-sm text-center">{transcript}</p>
+              </div>
+            )}
+
+            {/* Status label */}
+            <p className="text-white/70 text-sm font-medium tracking-wide">
+              {voiceStatusLabel}
+            </p>
+
+            {/* Voice preference toggle */}
+            <button
+              onClick={toggleVoicePreference}
+              className="text-white/50 text-xs hover:text-white/80 transition-colors cursor-pointer"
+            >
+              Voice: {voicePreference === "female" ? "Female" : "Male"}
+            </button>
+
+            {/* Hold-to-talk button */}
+            <div className="relative">
+              {/* Progress ring */}
+              {holdProgress > 0 && (
+                <svg className="absolute -inset-2 w-[72px] h-[72px]" viewBox="0 0 72 72">
+                  <circle
+                    cx="36" cy="36" r="32"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={`${holdProgress * 201} 201`}
+                    className="opacity-60"
+                    transform="rotate(-90 36 36)"
+                  />
+                </svg>
+              )}
+              <button
+                onPointerDown={handleTalkPointerDown}
+                onPointerUp={handleTalkPointerUp}
+                onPointerLeave={handleTalkPointerUp}
+                className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                  voiceState === "listening"
+                    ? "bg-red-500 hover:bg-red-400"
+                    : "bg-white/20 hover:bg-white/30"
+                }`}
+              >
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Exit button */}
+            <button
+              onClick={exitVoiceMode}
+              className="text-white/40 text-xs hover:text-white/70 transition-colors cursor-pointer mt-2"
+            >
+              Exit voice mode
+            </button>
+
+            {/* STT error */}
+            {sttError && (
+              <p className="text-red-400 text-xs">{sttError}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Content overlay on top of globe (hidden during voice mode) */}
+      <div className={`relative z-10 flex flex-col h-full pointer-events-none transition-opacity duration-300 ${
+        inVoiceMode ? "opacity-0 pointer-events-none" : "opacity-100"
+      }`}>
+        {/* Scrollable messages area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
-          {/* Spacer to push messages below the globe center — clicks pass through */}
           <div className="min-h-[60vh]" />
 
-          {/* Last assistant response only — only text gets pointer events */}
           <div className="flex flex-col justify-start px-8 pt-4 pb-2 max-w-2xl mx-auto w-full pointer-events-auto">
           <div className="space-y-5">
             {displayMessages.map((item) => (
@@ -401,7 +673,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           </div>
         </div>
 
-        {/* Quick reply pills + Input — always visible at bottom */}
+        {/* Quick reply pills + Input */}
         <div className="flex-none p-4 max-w-2xl mx-auto w-full pointer-events-auto">
         {quickReplies.length > 0 && !isLoading && (
           <div className="flex flex-wrap gap-2 mb-3">
@@ -425,7 +697,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               onBlur={() => setShowClearConfirm(false)}
               className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors cursor-pointer whitespace-nowrap self-center"
             >
-              {showClearConfirm ? "Clear all?" : "×"}
+              {showClearConfirm ? "Clear all?" : "\u00D7"}
             </button>
           )}
           <textarea
@@ -436,7 +708,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
             placeholder="Tell me what you want to accomplish..."
             rows={1}
             className="flex-1 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 text-sm max-h-32 bg-white dark:bg-gray-900"
-            disabled={isLoading}
+            disabled={isLoading || inVoiceMode}
           />
           <button
             type="submit"
@@ -445,6 +717,36 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           >
             Send
           </button>
+          {/* Talk button */}
+          <div className="relative">
+            {holdProgress > 0 && voiceState === "idle" && (
+              <svg className="absolute -inset-1 w-[52px] h-[52px]" viewBox="0 0 52 52">
+                <circle
+                  cx="26" cy="26" r="23"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeDasharray={`${holdProgress * 144.5} 144.5`}
+                  className="text-gray-400 dark:text-gray-500"
+                  transform="rotate(-90 26 26)"
+                />
+              </svg>
+            )}
+            <button
+              type="button"
+              onPointerDown={handleTalkPointerDown}
+              onPointerUp={handleTalkPointerUp}
+              onPointerLeave={handleTalkPointerUp}
+              className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 px-3 py-3 rounded-xl transition-colors cursor-pointer"
+              title="Hold to talk"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+              </svg>
+            </button>
+          </div>
         </form>
       </div>
       </div>
