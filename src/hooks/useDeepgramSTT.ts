@@ -143,9 +143,13 @@ export function useDeepgramSTT(
 
       ws.onopen = () => {
         // 4. Start MediaRecorder to send audio chunks
-        const recorder = new MediaRecorder(stream, {
-          mimeType: "audio/webm;codecs=opus",
-        });
+        // Safari doesn't support webm — pick a supported format
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
         mediaRecorderRef.current = recorder;
 
         recorder.ondataavailable = (event) => {
