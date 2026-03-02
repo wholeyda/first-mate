@@ -1,9 +1,8 @@
 /**
  * Goals Sidebar
  *
- * Shows active goals, news, and recommendations on the right side of the dashboard.
- * Order: Active Goals -> News -> Recommendations
- * Each section shows max 3 items with its own mini scroller.
+ * Shows active goals and recommendations on the right side of the dashboard.
+ * Order: Active Goals -> Recommendations (interleaved tips + suggestions)
  * Goals can be deleted, completed via AEIOU flow, and have expandable subtasks.
  */
 
@@ -12,8 +11,7 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Goal, SubGoal } from "@/types/database";
-import { SuggestionsPanel } from "@/components/suggestions-panel";
-import { NewsPanel } from "@/components/news-panel";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
 
 interface GoalsSidebarProps {
   goals: Goal[];
@@ -345,17 +343,9 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
       {/* Divider */}
       <div className="flex-none border-t border-gray-100 dark:border-gray-800" />
 
-      {/* 2. News section — 2 items visible */}
-      <div className="max-h-[280px] overflow-y-auto py-4">
-        <NewsPanel maxItems={2} />
-      </div>
-
-      {/* Divider */}
-      <div className="flex-none border-t border-gray-100 dark:border-gray-800" />
-
-      {/* 3. Recommendations section — 2 items visible */}
+      {/* 2. Recommendations — interleaved tips + suggestions */}
       <div className="flex-1 overflow-y-auto py-4">
-        <SuggestionsPanel maxItems={2} />
+        <RecommendationsPanel maxItems={4} />
       </div>
     </aside>
   );

@@ -19,7 +19,7 @@ import { PLANET_RADIUS, PLANET_SPIN_SPEED } from "../constants";
 import { useSceneTheme } from "../SceneThemeContext";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "../shaders/glassSphere.glsl";
 import { ATMOSPHERE_RIM_VERTEX, ATMOSPHERE_RIM_FRAGMENT } from "../shaders/atmosphereRim.glsl";
-import { ACCRETION_DISK_VERTEX, ACCRETION_DISK_FRAGMENT } from "../shaders/accretionDisk.glsl";
+import { CubeRing } from "../CubeRing";
 
 export interface BasePlanetProps {
   /** Deep interior swirl color */
@@ -112,28 +112,9 @@ export function BasePlanet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Accretion disk ring material ----
-  const ringMaterial = useMemo(() => {
-    if (!hasRings) return null;
-    const c1 = new THREE.Color(ringColor || primaryColor);
-    const c2 = new THREE.Color(ringSecondaryColor || accentColor);
-    return new THREE.ShaderMaterial({
-      vertexShader: ACCRETION_DISK_VERTEX,
-      fragmentShader: ACCRETION_DISK_FRAGMENT,
-      uniforms: {
-        uTime: { value: 0 },
-        uAnimSpeed: { value: animationSpeed },
-        uIsDark: { value: 1.0 },
-        uRingColor1: { value: new THREE.Vector3(c1.r, c1.g, c1.b) },
-        uRingColor2: { value: new THREE.Vector3(c2.r, c2.g, c2.b) },
-      },
-      transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Ring colors for CubeRing
+  const ringC1 = ringColor || primaryColor;
+  const ringC2 = ringSecondaryColor || accentColor;
 
   // ---- Animation loop ----
   useFrame((_, delta) => {
@@ -167,18 +148,6 @@ export function BasePlanet({
       atmosphereMaterial.needsUpdate = true;
     }
 
-    // Update ring
-    if (ringMaterial) {
-      ringMaterial.uniforms.uTime.value = glassMaterial.uniforms.uTime.value;
-      ringMaterial.uniforms.uAnimSpeed.value = animationSpeed;
-      ringMaterial.uniforms.uIsDark.value = darkVal;
-
-      const ringBlending = isDark ? THREE.AdditiveBlending : THREE.NormalBlending;
-      if (ringMaterial.blending !== ringBlending) {
-        ringMaterial.blending = ringBlending;
-        ringMaterial.needsUpdate = true;
-      }
-    }
   });
 
   return (
@@ -197,14 +166,17 @@ export function BasePlanet({
         <sphereGeometry args={[radius * 1.05, 32, 32]} />
       </mesh>
 
-      {/* Accretion disk ring */}
-      {hasRings && ringMaterial && (
-        <mesh
-          material={ringMaterial}
-          rotation={[Math.PI * 0.42, 0, 0]}
-        >
-          <ringGeometry args={[radius * 1.5, radius * 3.5, 128, 1]} />
-        </mesh>
+      {/* Cube ring */}
+      {hasRings && (
+        <CubeRing
+          innerRadius={radius * 1.5}
+          outerRadius={radius * 3.0}
+          count={150}
+          cubeSize={0.03}
+          color1={ringC1}
+          color2={ringC2}
+          speed={animationSpeed}
+        />
       )}
 
       {/* Type-specific extras (moons, shards, gears, etc.) */}
