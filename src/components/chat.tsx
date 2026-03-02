@@ -6,11 +6,11 @@
  * The globe serves as both visual centerpiece and loading indicator.
  * Planets orbit the globe — clicking one opens a branded removal modal.
  *
- * Voice mode: Hold the Talk button for 1.5s to toggle voice mode on/off.
- * In voice mode the UI fades out leaving only the planet + voice overlay.
- * User speaks freely — Deepgram detects silence (utterance end) and
- * auto-sends the message. AI responds via TTS, then listening resumes.
- * Hold again for 1.5s to exit voice mode.
+ * Voice mode: Tap the mic button to enter voice mode.
+ * Screen goes black, planet takes center stage and pulses.
+ * User speaks freely — Deepgram detects 1.5s silence and auto-sends.
+ * AI responds via TTS, planet grows/shrinks with amplitude.
+ * Tap the X button to exit voice mode.
  */
 
 "use client";
@@ -45,8 +45,6 @@ interface ChatProps {
 }
 
 type VoiceState = "idle" | "listening" | "processing" | "speaking";
-
-const HOLD_DURATION = 1500; // ms to hold before activating/deactivating
 
 /**
  * Detect what kind of quick replies to show based on assistant message content.
@@ -89,17 +87,15 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   // ---- Voice mode state ----
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [voicePreference, setVoicePreference] = useState<"male" | "female">("female");
-  const [holdProgress, setHoldProgress] = useState(0);
   const [ttsAmplitude, setTtsAmplitude] = useState(0);
-  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const holdStartRef = useRef<number>(0);
-  const holdAnimRef = useRef<number>(0);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsAnalyserRef = useRef<AnalyserNode | null>(null);
   const ttsContextRef = useRef<AudioContext | null>(null);
   const ttsAnimRef = useRef<number>(0);
   const voiceStateRef = useRef<VoiceState>("idle");
   const messagesRef = useRef<Message[]>([]);
+  const voicePreferenceRef = useRef<"male" | "female">("female");
+  const playTTSRef = useRef<(text: string) => Promise<void>>(async () => {});
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -109,6 +105,10 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    voicePreferenceRef.current = voicePreference;
+  }, [voicePreference]);
 
   // ---- Core chat submission (shared by text + voice) ----
   const sendMessage = useCallback(async (text: string, fromVoice: boolean = false) => {
@@ -285,7 +285,16 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
 
       // If in voice mode, play TTS — then auto-resume listening
       if (fromVoice && cleanContent) {
-        await playTTS(cleanContent);
+        console.log("[Voice] Playing TTS for response, length:", cleanContent.length);
+        await playTTSRef.current(cleanContent);
+      } else if (fromVoice) {
+        console.log("[Voice] Skipping TTS — cleanContent empty:", !cleanContent, "fromVoice:", fromVoice);
+        // Still go back to listening even if no content to speak
+        if (voiceStateRef.current !== "idle") {
+          setVoiceState("listening");
+          voiceStateRef.current = "listening";
+          startListening();
+        }
       }
     } catch (error) {
       console.error("Chat error:", error);
@@ -307,6 +316,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
 
   // ---- Auto-send callback when Deepgram detects user stopped speaking ----
   const handleUtteranceEnd = useCallback((text: string) => {
+    console.log("[Voice] Utterance end detected:", text, "state:", voiceStateRef.current);
     // Only auto-send if we're in listening state
     if (voiceStateRef.current !== "listening") return;
     if (!text.trim()) return;
@@ -425,119 +435,106 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     onHistoryCleared?.();
   }
 
-  // ---- TTS Playback ----
-  async function playTTS(text: string) {
-    setVoiceState("speaking");
-    voiceStateRef.current = "speaking";
-    try {
-      const res = await fetch("/api/voice/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: voicePreference }),
-      });
+  // ---- TTS Playback (ref-stable so sendMessage's useCallback can call it) ----
+  useEffect(() => {
+    playTTSRef.current = async (text: string) => {
+      setVoiceState("speaking");
+      voiceStateRef.current = "speaking";
+      try {
+        const res = await fetch("/api/voice/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice: voicePreferenceRef.current }),
+        });
 
-      if (!res.ok) throw new Error("TTS failed");
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      ttsAudioRef.current = audio;
-
-      // Set up AudioContext + AnalyserNode for TTS amplitude
-      const audioCtx = new AudioContext();
-      ttsContextRef.current = audioCtx;
-      const source = audioCtx.createMediaElementSource(audio);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      analyser.connect(audioCtx.destination);
-      ttsAnalyserRef.current = analyser;
-
-      // Start TTS amplitude monitoring
-      function updateTtsAmplitude() {
-        if (!ttsAnalyserRef.current) return;
-        const data = new Uint8Array(ttsAnalyserRef.current.frequencyBinCount);
-        ttsAnalyserRef.current.getByteFrequencyData(data);
-        const sum = data.reduce((a, b) => a + b, 0);
-        const avg = sum / data.length / 255;
-        setTtsAmplitude(avg);
-        ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
-      }
-      ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
-
-      audio.onended = () => {
-        // Cleanup TTS audio resources
-        cancelAnimationFrame(ttsAnimRef.current);
-        setTtsAmplitude(0);
-        URL.revokeObjectURL(url);
-        if (ttsContextRef.current && ttsContextRef.current.state !== "closed") {
-          ttsContextRef.current.close();
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => "");
+          console.error("TTS API error:", res.status, errBody);
+          throw new Error("TTS failed");
         }
-        ttsContextRef.current = null;
-        ttsAnalyserRef.current = null;
-        ttsAudioRef.current = null;
 
-        // If still in voice mode, go back to listening automatically
-        if (voiceStateRef.current !== "idle") {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        ttsAudioRef.current = audio;
+
+        // Set up AudioContext + AnalyserNode for TTS amplitude
+        // Resume context if suspended (Chrome autoplay policy)
+        const audioCtx = new AudioContext();
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+        ttsContextRef.current = audioCtx;
+        const source = audioCtx.createMediaElementSource(audio);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        ttsAnalyserRef.current = analyser;
+
+        // Start TTS amplitude monitoring
+        function updateTtsAmplitude() {
+          if (!ttsAnalyserRef.current) return;
+          const data = new Uint8Array(ttsAnalyserRef.current.frequencyBinCount);
+          ttsAnalyserRef.current.getByteFrequencyData(data);
+          const sum = data.reduce((a, b) => a + b, 0);
+          const avg = sum / data.length / 255;
+          setTtsAmplitude(avg);
+          ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
+        }
+        ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
+
+        audio.onended = () => {
+          // Cleanup TTS audio resources
+          cancelAnimationFrame(ttsAnimRef.current);
+          setTtsAmplitude(0);
+          URL.revokeObjectURL(url);
+          if (ttsContextRef.current && ttsContextRef.current.state !== "closed") {
+            ttsContextRef.current.close();
+          }
+          ttsContextRef.current = null;
+          ttsAnalyserRef.current = null;
+          ttsAudioRef.current = null;
+
+          // If still in voice mode, go back to listening automatically
+          if (voiceStateRef.current !== "idle") {
+            setVoiceState("listening");
+            voiceStateRef.current = "listening";
+            startListening();
+          }
+        };
+
+        audio.onerror = (e) => {
+          console.error("Audio playback error:", e);
+          // Fall back to listening
+          if (voiceStateRef.current !== "idle") {
+            setVoiceState("listening");
+            voiceStateRef.current = "listening";
+            startListening();
+          }
+        };
+
+        await audio.play();
+      } catch (err) {
+        console.error("TTS playback error:", err);
+        // Fall back — go back to listening if still in voice mode
+        const currentState = voiceStateRef.current as string;
+        if (currentState !== "idle") {
           setVoiceState("listening");
           voiceStateRef.current = "listening";
           startListening();
         }
-      };
-
-      await audio.play();
-    } catch (err) {
-      console.error("TTS playback error:", err);
-      // Fall back — go back to listening if still in voice mode
-      const currentState = voiceStateRef.current as string;
-      if (currentState !== "idle") {
-        setVoiceState("listening");
-        voiceStateRef.current = "listening";
-        startListening();
       }
+    };
+  }, [startListening]);
+
+  // ---- Tap to enter voice mode ----
+  function handleTalkClick() {
+    if (voiceStateRef.current === "idle") {
+      setVoiceState("listening");
+      voiceStateRef.current = "listening";
+      startListening();
     }
-  }
-
-  // ---- Hold-to-toggle gesture ----
-  // Hold for 1.5s to toggle voice mode ON or OFF
-  function handleTalkPointerDown() {
-    holdStartRef.current = Date.now();
-    setHoldProgress(0);
-
-    // Animate progress ring
-    function animateProgress() {
-      const elapsed = Date.now() - holdStartRef.current;
-      const progress = Math.min(elapsed / HOLD_DURATION, 1);
-      setHoldProgress(progress);
-
-      if (progress < 1) {
-        holdAnimRef.current = requestAnimationFrame(animateProgress);
-      }
-    }
-    holdAnimRef.current = requestAnimationFrame(animateProgress);
-
-    holdTimerRef.current = setTimeout(() => {
-      setHoldProgress(0);
-
-      if (voiceStateRef.current === "idle") {
-        // ---- Activate voice mode ----
-        setVoiceState("listening");
-        voiceStateRef.current = "listening";
-        startListening();
-      } else {
-        // ---- Deactivate voice mode ----
-        exitVoiceMode();
-      }
-    }, HOLD_DURATION);
-  }
-
-  function handleTalkPointerUp() {
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
-    cancelAnimationFrame(holdAnimRef.current);
-    setHoldProgress(0);
   }
 
   // Exit voice mode — full cleanup
@@ -584,6 +581,11 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
 
   const inVoiceMode = voiceState !== "idle";
 
+  // In voice mode, add a gentle base pulse so the planet always moves
+  // even when there's no audio signal (0.05 base keeps it visually alive)
+  const voiceModeBaseAmplitude = inVoiceMode ? 0.05 : 0;
+  const effectiveAmplitude = Math.max(currentAmplitude, voiceModeBaseAmplitude);
+
   return (
     <div className={`relative flex flex-col h-full overflow-hidden transition-colors duration-500 ${
       inVoiceMode ? "bg-black" : "bg-white dark:bg-gray-950"
@@ -596,111 +598,52 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           onIslandClick={handlePlanetClick}
           starConfig={starConfig}
           onStarClick={onStarClick}
-          voiceAmplitude={currentAmplitude}
+          voiceAmplitude={effectiveAmplitude}
           voiceMode={inVoiceMode}
         />
       </div>
 
-      {/* Voice mode overlay */}
+      {/* Voice mode overlay — minimal, planet takes center stage */}
       {inVoiceMode && (
-        <div className={`absolute inset-0 z-20 flex flex-col items-center justify-end pb-8 transition-opacity duration-500 ${
-          inVoiceMode ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}>
-          {/* No background div needed — parent container is already black in voice mode */}
-
-          {/* Status + controls */}
-          <div className="relative z-10 flex flex-col items-center gap-4">
-            {/* Live transcript preview */}
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-between py-12 pointer-events-none">
+          {/* Top area: live transcript */}
+          <div className="flex flex-col items-center gap-2 pointer-events-none">
             {voiceState === "listening" && transcript && (
-              <div className="max-w-md px-6 py-3 bg-black/30 rounded-xl backdrop-blur-sm">
-                <p className="text-white/80 text-sm text-center">{transcript}</p>
-              </div>
+              <p className="text-white/60 text-sm text-center max-w-xs px-4 leading-relaxed">
+                {transcript}
+              </p>
             )}
+          </div>
 
-            {/* Status label */}
-            <p className="text-white/70 text-sm font-medium tracking-wide">
+          {/* Bottom area: status label + exit button */}
+          <div className="flex flex-col items-center gap-5 pointer-events-auto">
+            {/* Status */}
+            <p className="text-white/50 text-xs font-medium tracking-widest uppercase">
               {voiceStatusLabel}
             </p>
-
-            {/* Pulsing indicator for listening state */}
-            {voiceState === "listening" && (
-              <div className="relative flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full bg-red-500/20 animate-ping absolute" />
-                <div className="w-12 h-12 rounded-full bg-red-500/30 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                  </svg>
-                </div>
-              </div>
-            )}
-
-            {/* Processing spinner */}
-            {voiceState === "processing" && (
-              <div className="w-10 h-10 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
-            )}
-
-            {/* Speaking waveform indicator */}
-            {voiceState === "speaking" && (
-              <div className="flex items-center gap-1 h-10">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="w-1 bg-white/70 rounded-full animate-pulse"
-                    style={{
-                      height: `${12 + Math.random() * 20}px`,
-                      animationDelay: `${i * 0.15}s`,
-                      animationDuration: '0.6s',
-                    }}
-                  />
-                ))}
-              </div>
-            )}
 
             {/* Voice preference toggle */}
             <button
               onClick={toggleVoicePreference}
-              className="text-white/50 text-xs hover:text-white/80 transition-colors cursor-pointer"
+              className="text-white/30 text-[10px] hover:text-white/60 transition-colors cursor-pointer tracking-wide"
             >
-              Voice: {voicePreference === "female" ? "Female" : "Male"}
+              {voicePreference === "female" ? "♀ Female" : "♂ Male"}
             </button>
 
-            {/* Exit voice mode — hold to exit */}
-            <div className="relative">
-              {holdProgress > 0 && (
-                <svg className="absolute -inset-2 w-[72px] h-[72px]" viewBox="0 0 72 72">
-                  <circle
-                    cx="36" cy="36" r="32"
-                    fill="none"
-                    stroke="white"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeDasharray={`${holdProgress * 201} 201`}
-                    className="opacity-60"
-                    transform="rotate(-90 36 36)"
-                  />
-                </svg>
-              )}
-              <button
-                onPointerDown={handleTalkPointerDown}
-                onPointerUp={handleTalkPointerUp}
-                onPointerLeave={handleTalkPointerUp}
-                className="w-14 h-14 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 transition-colors cursor-pointer"
-                title="Hold to exit voice mode"
-              >
-                <svg className="w-5 h-5 text-white/70" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <p className="text-white/30 text-[10px] mt-1">
-              Hold to exit
-            </p>
+            {/* Exit button — simple tap */}
+            <button
+              onClick={exitVoiceMode}
+              className="w-12 h-12 rounded-full flex items-center justify-center bg-white/8 hover:bg-white/15 border border-white/15 transition-all duration-200 cursor-pointer"
+              title="Exit voice mode"
+            >
+              <svg className="w-4 h-4 text-white/50" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
 
             {/* STT error */}
             {sttError && (
-              <p className="text-red-400 text-xs">{sttError}</p>
+              <p className="text-red-400/70 text-[10px]">{sttError}</p>
             )}
           </div>
         </div>
@@ -779,36 +722,18 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           >
             Send
           </button>
-          {/* Talk button — hold to enter/exit voice mode */}
-          <div className="relative">
-            {holdProgress > 0 && voiceState === "idle" && (
-              <svg className="absolute -inset-1 w-[52px] h-[52px]" viewBox="0 0 52 52">
-                <circle
-                  cx="26" cy="26" r="23"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeDasharray={`${holdProgress * 144.5} 144.5`}
-                  className="text-gray-400 dark:text-gray-500"
-                  transform="rotate(-90 26 26)"
-                />
-              </svg>
-            )}
-            <button
-              type="button"
-              onPointerDown={handleTalkPointerDown}
-              onPointerUp={handleTalkPointerUp}
-              onPointerLeave={handleTalkPointerUp}
-              className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 px-3 py-3 rounded-xl transition-colors cursor-pointer"
-              title="Hold to talk"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-              </svg>
-            </button>
-          </div>
+          {/* Talk button — tap to enter voice mode */}
+          <button
+            type="button"
+            onClick={handleTalkClick}
+            className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 px-3 py-3 rounded-xl transition-colors cursor-pointer"
+            title="Talk to First Mate"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+            </svg>
+          </button>
         </form>
       </div>
       </div>

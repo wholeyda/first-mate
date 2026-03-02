@@ -13,8 +13,8 @@
 
 "use client";
 
-import { useRef, useState, useMemo, Suspense, useCallback } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useRef, useState, useMemo, Suspense, useCallback, useEffect } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Line } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
@@ -146,15 +146,20 @@ function CentralStarAnimated({
   starConfig,
   onStarClick,
   voiceAmplitude = 0,
+  voiceMode = false,
 }: {
   activeIntensityRef: React.MutableRefObject<number>;
   starConfig?: StarConfig;
   onStarClick?: () => void;
   voiceAmplitude?: number;
+  voiceMode?: boolean;
 }) {
   const [intensity, setIntensity] = useState(0);
+  const pulseTimeRef = useRef(0);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    pulseTimeRef.current += delta;
+
     // Use voice amplitude if active, otherwise fall back to chat active intensity
     const current = voiceAmplitude > 0.01 ? voiceAmplitude : activeIntensityRef.current;
     if (Math.abs(current - intensity) > 0.02) {
@@ -162,14 +167,43 @@ function CentralStarAnimated({
     }
   });
 
+  // In voice mode, add a sinusoidal pulse on top of the amplitude
+  // This keeps the planet alive even during silence/processing
+  const voicePulse = voiceMode
+    ? voiceAmplitude + Math.sin(pulseTimeRef.current * 2.5) * 0.08 + 0.08
+    : voiceAmplitude;
+
   return (
     <CentralStar
       activeIntensity={intensity}
       config={starConfig}
       onStarClick={onStarClick}
-      voiceAmplitude={voiceAmplitude}
+      voiceAmplitude={voicePulse}
+      voiceMode={voiceMode}
     />
   );
+}
+
+// ---- Camera controller — zooms in when entering voice mode ----
+function CameraController({ voiceMode }: { voiceMode: boolean }) {
+  const { camera } = useThree();
+  const targetZRef = useRef(CAMERA_DISTANCE);
+  const targetYRef = useRef(3);
+
+  useEffect(() => {
+    // When entering voice mode: zoom in close, center vertically
+    // When exiting: zoom back out to default position
+    targetZRef.current = voiceMode ? 10 : CAMERA_DISTANCE;
+    targetYRef.current = voiceMode ? 0 : 3;
+  }, [voiceMode]);
+
+  useFrame(() => {
+    camera.position.z += (targetZRef.current - camera.position.z) * 0.06;
+    camera.position.y += (targetYRef.current - camera.position.y) * 0.06;
+    camera.lookAt(0, 0, 0);
+  });
+
+  return null;
 }
 
 // ---- Main scene (inside Canvas) ----
@@ -202,6 +236,9 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDa
 
   return (
     <SceneThemeProvider isDark={isDark}>
+      {/* Camera zoom controller */}
+      <CameraController voiceMode={voiceMode} />
+
       <group rotation={[SCENE_TILT, 0, 0]}>
         {/* Hero planet (formerly central star) */}
         <CentralStarAnimated
@@ -209,6 +246,7 @@ function Scene({ isActive, islands, onIslandClick, starConfig, onStarClick, isDa
           starConfig={starConfig}
           onStarClick={onStarClick}
           voiceAmplitude={voiceAmplitude}
+          voiceMode={voiceMode}
         />
 
         {/* Orbit path lines — hidden in voice mode */}
@@ -323,11 +361,11 @@ export function Globe3DCanvas({
             />
           </EffectComposer>
 
-          {/* Camera controls: zoom only */}
+          {/* Camera controls: zoom only (disabled during voice mode so camera can animate freely) */}
           <OrbitControls
             enableRotate={false}
             enablePan={false}
-            enableZoom
+            enableZoom={!voiceMode}
             minDistance={ZOOM_MIN_DISTANCE}
             maxDistance={ZOOM_MAX_DISTANCE}
             zoomSpeed={0.5}

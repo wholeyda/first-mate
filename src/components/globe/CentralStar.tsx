@@ -36,6 +36,7 @@ interface HeroPlanetProps {
   config?: StarConfig;
   onStarClick?: () => void;
   voiceAmplitude?: number;
+  voiceMode?: boolean;
 }
 
 export function CentralStar({
@@ -43,6 +44,7 @@ export function CentralStar({
   config,
   onStarClick,
   voiceAmplitude = 0,
+  voiceMode = false,
 }: HeroPlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
   const scaleRef = useRef(1.0);
@@ -134,9 +136,11 @@ export function CentralStar({
     }
 
     // Voice amplitude → scale animation (smooth lerp)
-    // Boost amplitude significantly so the planet visibly grows/shrinks
-    const targetScale = 1.0 + voiceAmplitude * 1.5;
-    scaleRef.current += (targetScale - scaleRef.current) * 0.12;
+    // In voice mode: base scale is 1.4 (planet is larger) + amplitude drives further growth
+    // In normal mode: base 1.0 + small amplitude wiggle
+    const baseScale = voiceMode ? 1.4 : 1.0;
+    const targetScale = baseScale + voiceAmplitude * 2.0;
+    scaleRef.current += (targetScale - scaleRef.current) * 0.10;
 
     // Slow rotation + scale
     if (groupRef.current) {
