@@ -22,6 +22,7 @@ import { PlanetRemoveModal } from "@/components/planet-remove-modal";
 import { Island } from "@/types/database";
 import { StarConfig } from "@/types/star-config";
 import { useDeepgramSTT } from "@/hooks/useDeepgramSTT";
+import { useTheme } from "@/components/theme-provider";
 
 interface Message {
   role: "user" | "assistant";
@@ -75,6 +76,7 @@ function detectQuickReplies(text: string): string[] {
 }
 
 export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared, starConfig, onStarClick, userName }: ChatProps) {
+  const { isDark: isDarkMode } = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -617,7 +619,9 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   const effectiveAmplitude = Math.max(currentAmplitude, voiceModeBaseAmplitude);
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden bg-black">
+    <div className={`relative flex flex-col h-full overflow-hidden transition-colors duration-300 ${
+      isDarkMode ? "bg-black" : "bg-white"
+    }`}>
       {/* Globe — absolute background filling the entire panel */}
       <div className="absolute inset-0 z-0">
         <Globe
@@ -692,7 +696,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                 key={`msg-${item.originalIndex}`}
                 className="chat-message-fade"
               >
-                <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
+                <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
                   {item.message.content}
                 </p>
                 {isScheduling && (
@@ -715,7 +719,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                 key={reply}
                 type="button"
                 onClick={() => handleQuickReply(reply)}
-                className="px-4 py-1.5 text-sm rounded-full border border-white/15 bg-white/8 text-gray-300 hover:bg-white/15 hover:border-white/25 transition-colors cursor-pointer"
+                className="px-4 py-1.5 text-sm rounded-full border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/8 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/15 transition-colors cursor-pointer"
               >
                 {reply}
               </button>
@@ -728,7 +732,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               type="button"
               onClick={handleClear}
               onBlur={() => setShowClearConfirm(false)}
-              className="text-xs text-gray-600 hover:text-red-400 transition-colors cursor-pointer whitespace-nowrap self-center"
+              className="text-xs text-gray-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer whitespace-nowrap self-center"
             >
               {showClearConfirm ? "Clear all?" : "\u00D7"}
             </button>
@@ -740,13 +744,13 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
             onKeyDown={handleKeyDown}
             placeholder="Tell me what you want to accomplish..."
             rows={1}
-            className="flex-1 border border-white/10 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-600 resize-none focus:outline-none focus:border-white/20 text-sm max-h-32 bg-white/5"
+            className="flex-1 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-gray-400 dark:focus:border-white/20 text-sm max-h-32 bg-white dark:bg-white/5"
             disabled={isLoading || inVoiceMode}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="bg-white/90 hover:bg-white disabled:bg-white/20 disabled:cursor-not-allowed text-gray-900 font-medium px-5 py-3 rounded-xl transition-colors text-sm cursor-pointer"
+            className="bg-gray-900 dark:bg-white/90 hover:bg-gray-700 dark:hover:bg-white disabled:bg-gray-300 dark:disabled:bg-white/20 disabled:cursor-not-allowed text-white dark:text-gray-900 font-medium px-5 py-3 rounded-xl transition-colors text-sm cursor-pointer"
           >
             Send
           </button>
@@ -754,7 +758,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           <button
             type="button"
             onClick={handleTalkClick}
-            className="bg-white/10 hover:bg-white/20 text-gray-400 px-3 py-3 rounded-xl transition-colors cursor-pointer"
+            className="bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 px-3 py-3 rounded-xl transition-colors cursor-pointer"
             title="Talk to First Mate"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

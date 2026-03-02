@@ -136,7 +136,7 @@ export function useDeepgramSTT(
       // utterance_end_ms=1500 — Deepgram fires UtteranceEnd event when
       // silence exceeds 1.5s after the last final transcript
       const ws = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=300&utterance_end_ms=1500`,
+        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=200&utterance_end_ms=900`,
         ["token", dgKey]
       );
       websocketRef.current = ws;
