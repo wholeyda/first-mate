@@ -6,9 +6,11 @@
  * The globe serves as both visual centerpiece and loading indicator.
  * Planets orbit the globe — clicking one opens a branded removal modal.
  *
- * Voice mode: Hold the Talk button for 1.5s to enter/exit voice mode.
- * In voice mode, the UI fades out leaving only the planet, which reacts
- * to audio amplitude from mic (listening) or TTS playback (speaking).
+ * Voice mode: Hold the Talk button for 1.5s to toggle voice mode on/off.
+ * In voice mode the UI fades out leaving only the planet + voice overlay.
+ * User speaks freely — Deepgram detects silence (utterance end) and
+ * auto-sends the message. AI responds via TTS, then listening resumes.
+ * Hold again for 1.5s to exit voice mode.
  */
 
 "use client";
@@ -42,7 +44,7 @@ interface ChatProps {
   onStarClick?: () => void;
 }
 
-type VoiceState = "idle" | "activating" | "listening" | "processing" | "speaking";
+type VoiceState = "idle" | "listening" | "processing" | "speaking";
 
 const HOLD_DURATION = 1500; // ms to hold before activating/deactivating
 
@@ -96,100 +98,34 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   const ttsAnalyserRef = useRef<AnalyserNode | null>(null);
   const ttsContextRef = useRef<AudioContext | null>(null);
   const ttsAnimRef = useRef<number>(0);
+  const voiceStateRef = useRef<VoiceState>("idle");
+  const messagesRef = useRef<Message[]>([]);
 
-  const {
-    startListening,
-    stopListening,
-    transcript,
-    isListening,
-    audioAmplitude: micAmplitude,
-    error: sttError,
-  } = useDeepgramSTT();
-
-  // Determine the current amplitude to drive the planet
-  const currentAmplitude = voiceState === "listening" ? micAmplitude
-    : voiceState === "speaking" ? ttsAmplitude
-    : 0;
-
-  // Fetch voice preference on mount
+  // Keep refs in sync with state
   useEffect(() => {
-    async function fetchPref() {
-      try {
-        const res = await fetch("/api/voice-preference");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.voicePreference) setVoicePreference(data.voicePreference);
-        }
-      } catch {
-        // Use default
-      }
-    }
-    fetchPref();
-  }, []);
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
 
-  // Auto-scroll to bottom when messages change or loading state changes
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isLoading]);
-
-  // Auto-resize textarea
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto";
-      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-    }
-  }, [input]);
-
-  // Show only the last assistant message
-  const displayMessages = messages
-    .map((m, i) => ({ message: m, originalIndex: i }))
-    .filter((item) => item.message.role === "assistant" && item.message.content.length > 0)
-    .slice(-1);
-
-  function handlePlanetClick(island: Island) {
-    setRemovingPlanet(island);
-  }
-
-  async function handlePlanetRemoveConfirm() {
-    if (!removingPlanet || !onIslandRemoved) return;
-    try {
-      const res = await fetch(`/api/islands?id=${removingPlanet.id}`, { method: "DELETE" });
-      if (res.ok) {
-        onIslandRemoved(removingPlanet.id);
-      }
-    } catch {
-      // Silent fail
-    }
-    setRemovingPlanet(null);
-  }
-
-  function handleQuickReply(reply: string) {
-    setInput(reply);
-    setQuickReplies([]);
-    setTimeout(() => {
-      const form = inputRef.current?.closest("form");
-      if (form) {
-        form.requestSubmit();
-      }
-    }, 0);
-  }
+    messagesRef.current = messages;
+  }, [messages]);
 
   // ---- Core chat submission (shared by text + voice) ----
   const sendMessage = useCallback(async (text: string, fromVoice: boolean = false) => {
     if (!text.trim() || isLoading) return;
 
     const userMessage: Message = { role: "user", content: text.trim() };
-    const updatedMessages = [...messages, userMessage];
+    const updatedMessages = [...messagesRef.current, userMessage];
 
     setMessages(updatedMessages);
+    messagesRef.current = updatedMessages;
     setInput("");
     setIsLoading(true);
     setQuickReplies([]);
 
     if (fromVoice) {
       setVoiceState("processing");
+      voiceStateRef.current = "processing";
     }
 
     let assistantContent = "";
@@ -347,7 +283,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         });
       }
 
-      // If in voice mode, play TTS
+      // If in voice mode, play TTS — then auto-resume listening
       if (fromVoice && cleanContent) {
         await playTTS(cleanContent);
       }
@@ -357,15 +293,108 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         ...prev,
         { role: "assistant", content: "Sorry, I hit a snag. Try again?" },
       ]);
-      if (fromVoice) {
+      // If in voice mode, go back to listening
+      if (fromVoice && voiceStateRef.current !== "idle") {
         setVoiceState("listening");
+        voiceStateRef.current = "listening";
         startListening();
       }
     } finally {
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, isLoading, onGoalCreated]);
+  }, [isLoading, onGoalCreated]);
+
+  // ---- Auto-send callback when Deepgram detects user stopped speaking ----
+  const handleUtteranceEnd = useCallback((text: string) => {
+    // Only auto-send if we're in listening state
+    if (voiceStateRef.current !== "listening") return;
+    if (!text.trim()) return;
+
+    // Stop listening while we process (will restart after TTS)
+    stopListeningFn();
+    sendMessage(text.trim(), true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sendMessage]);
+
+  const {
+    startListening,
+    stopListening: stopListeningFn,
+    transcript,
+    isListening,
+    audioAmplitude: micAmplitude,
+    error: sttError,
+  } = useDeepgramSTT(handleUtteranceEnd);
+
+  // Determine the current amplitude to drive the planet
+  const currentAmplitude = voiceState === "listening" ? micAmplitude
+    : voiceState === "speaking" ? ttsAmplitude
+    : 0;
+
+  // Fetch voice preference on mount
+  useEffect(() => {
+    async function fetchPref() {
+      try {
+        const res = await fetch("/api/voice-preference");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.voicePreference) setVoicePreference(data.voicePreference);
+        }
+      } catch {
+        // Use default
+      }
+    }
+    fetchPref();
+  }, []);
+
+  // Auto-scroll to bottom when messages change or loading state changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isLoading]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+    }
+  }, [input]);
+
+  // Show only the last assistant message
+  const displayMessages = messages
+    .map((m, i) => ({ message: m, originalIndex: i }))
+    .filter((item) => item.message.role === "assistant" && item.message.content.length > 0)
+    .slice(-1);
+
+  function handlePlanetClick(island: Island) {
+    setRemovingPlanet(island);
+  }
+
+  async function handlePlanetRemoveConfirm() {
+    if (!removingPlanet || !onIslandRemoved) return;
+    try {
+      const res = await fetch(`/api/islands?id=${removingPlanet.id}`, { method: "DELETE" });
+      if (res.ok) {
+        onIslandRemoved(removingPlanet.id);
+      }
+    } catch {
+      // Silent fail
+    }
+    setRemovingPlanet(null);
+  }
+
+  function handleQuickReply(reply: string) {
+    setInput(reply);
+    setQuickReplies([]);
+    setTimeout(() => {
+      const form = inputRef.current?.closest("form");
+      if (form) {
+        form.requestSubmit();
+      }
+    }, 0);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -399,6 +428,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   // ---- TTS Playback ----
   async function playTTS(text: string) {
     setVoiceState("speaking");
+    voiceStateRef.current = "speaking";
     try {
       const res = await fetch("/api/voice/tts", {
         method: "POST",
@@ -447,26 +477,34 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         ttsAnalyserRef.current = null;
         ttsAudioRef.current = null;
 
-        // Go back to listening
-        setVoiceState("listening");
-        startListening();
+        // If still in voice mode, go back to listening automatically
+        if (voiceStateRef.current !== "idle") {
+          setVoiceState("listening");
+          voiceStateRef.current = "listening";
+          startListening();
+        }
       };
 
       await audio.play();
     } catch (err) {
       console.error("TTS playback error:", err);
-      // Fall back to text display, go back to listening
-      setVoiceState("listening");
-      startListening();
+      // Fall back — go back to listening if still in voice mode
+      const currentState = voiceStateRef.current as string;
+      if (currentState !== "idle") {
+        setVoiceState("listening");
+        voiceStateRef.current = "listening";
+        startListening();
+      }
     }
   }
 
-  // ---- Hold-to-activate gesture ----
+  // ---- Hold-to-toggle gesture ----
+  // Hold for 1.5s to toggle voice mode ON or OFF
   function handleTalkPointerDown() {
     holdStartRef.current = Date.now();
     setHoldProgress(0);
 
-    // Animate progress
+    // Animate progress ring
     function animateProgress() {
       const elapsed = Date.now() - holdStartRef.current;
       const progress = Math.min(elapsed / HOLD_DURATION, 1);
@@ -480,19 +518,15 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
 
     holdTimerRef.current = setTimeout(() => {
       setHoldProgress(0);
-      if (voiceState === "idle") {
-        // Activate voice mode
+
+      if (voiceStateRef.current === "idle") {
+        // ---- Activate voice mode ----
         setVoiceState("listening");
+        voiceStateRef.current = "listening";
         startListening();
-      } else if (voiceState === "listening") {
-        // Deactivate → send transcript
-        const finalText = stopListening();
-        if (finalText.trim()) {
-          sendMessage(finalText.trim(), true);
-        } else {
-          setVoiceState("listening");
-          startListening();
-        }
+      } else {
+        // ---- Deactivate voice mode ----
+        exitVoiceMode();
       }
     }, HOLD_DURATION);
   }
@@ -506,10 +540,10 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     setHoldProgress(0);
   }
 
-  // Exit voice mode
+  // Exit voice mode — full cleanup
   function exitVoiceMode() {
     // Stop STT
-    if (isListening) stopListening();
+    if (isListening) stopListeningFn();
 
     // Stop TTS
     if (ttsAudioRef.current) {
@@ -524,6 +558,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     ttsAnalyserRef.current = null;
     setTtsAmplitude(0);
     setVoiceState("idle");
+    voiceStateRef.current = "idle";
   }
 
   // Save voice preference
@@ -545,7 +580,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     voiceState === "listening" ? "Listening..."
     : voiceState === "processing" ? "Thinking..."
     : voiceState === "speaking" ? "Speaking..."
-    : voiceState === "activating" ? "Hold..."
     : "";
 
   const inVoiceMode = voiceState !== "idle";
@@ -573,7 +607,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
 
           {/* Status + controls */}
-          <div className="relative z-10 flex flex-col items-center gap-6">
+          <div className="relative z-10 flex flex-col items-center gap-4">
             {/* Live transcript preview */}
             {voiceState === "listening" && transcript && (
               <div className="max-w-md px-6 py-3 bg-black/30 rounded-xl backdrop-blur-sm">
@@ -586,6 +620,41 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               {voiceStatusLabel}
             </p>
 
+            {/* Pulsing indicator for listening state */}
+            {voiceState === "listening" && (
+              <div className="relative flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-red-500/20 animate-ping absolute" />
+                <div className="w-12 h-12 rounded-full bg-red-500/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                  </svg>
+                </div>
+              </div>
+            )}
+
+            {/* Processing spinner */}
+            {voiceState === "processing" && (
+              <div className="w-10 h-10 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+            )}
+
+            {/* Speaking waveform indicator */}
+            {voiceState === "speaking" && (
+              <div className="flex items-center gap-1 h-10">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className="w-1 bg-white/70 rounded-full animate-pulse"
+                    style={{
+                      height: `${12 + Math.random() * 20}px`,
+                      animationDelay: `${i * 0.15}s`,
+                      animationDuration: '0.6s',
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Voice preference toggle */}
             <button
               onClick={toggleVoicePreference}
@@ -594,9 +663,8 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               Voice: {voicePreference === "female" ? "Female" : "Male"}
             </button>
 
-            {/* Hold-to-talk button */}
+            {/* Exit voice mode — hold to exit */}
             <div className="relative">
-              {/* Progress ring */}
               {holdProgress > 0 && (
                 <svg className="absolute -inset-2 w-[72px] h-[72px]" viewBox="0 0 72 72">
                   <circle
@@ -615,26 +683,18 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
                 onPointerDown={handleTalkPointerDown}
                 onPointerUp={handleTalkPointerUp}
                 onPointerLeave={handleTalkPointerUp}
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-                  voiceState === "listening"
-                    ? "bg-red-500 hover:bg-red-400"
-                    : "bg-white/20 hover:bg-white/30"
-                }`}
+                className="w-14 h-14 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 transition-colors cursor-pointer"
+                title="Hold to exit voice mode"
               >
-                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
-                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                <svg className="w-5 h-5 text-white/70" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Exit button */}
-            <button
-              onClick={exitVoiceMode}
-              className="text-white/40 text-xs hover:text-white/70 transition-colors cursor-pointer mt-2"
-            >
-              Exit voice mode
-            </button>
+            <p className="text-white/30 text-[10px] mt-1">
+              Hold to exit
+            </p>
 
             {/* STT error */}
             {sttError && (
@@ -717,7 +777,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           >
             Send
           </button>
-          {/* Talk button */}
+          {/* Talk button — hold to enter/exit voice mode */}
           <div className="relative">
             {holdProgress > 0 && voiceState === "idle" && (
               <svg className="absolute -inset-1 w-[52px] h-[52px]" viewBox="0 0 52 52">

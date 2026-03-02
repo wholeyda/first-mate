@@ -4,6 +4,9 @@
  * Captures mic audio, streams to Deepgram for real-time transcription,
  * and exposes audioAmplitude (0-1) from the mic's AnalyserNode
  * for driving planet animations.
+ *
+ * Uses `utterance_end_ms` so Deepgram fires an event when the user
+ * stops speaking for a natural pause — this triggers auto-send.
  */
 
 "use client";
@@ -25,7 +28,9 @@ interface DeepgramSTTResult {
   error: string | null;
 }
 
-export function useDeepgramSTT(): DeepgramSTTResult {
+export function useDeepgramSTT(
+  onUtteranceEnd?: (transcript: string) => void
+): DeepgramSTTResult {
   const [transcript, setTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [audioAmplitude, setAudioAmplitude] = useState(0);
@@ -38,6 +43,12 @@ export function useDeepgramSTT(): DeepgramSTTResult {
   const websocketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const finalTranscriptRef = useRef("");
+  const onUtteranceEndRef = useRef(onUtteranceEnd);
+
+  // Keep callback ref in sync
+  useEffect(() => {
+    onUtteranceEndRef.current = onUtteranceEnd;
+  }, [onUtteranceEnd]);
 
   // Amplitude monitoring loop
   const updateAmplitude = useCallback(() => {
@@ -122,8 +133,10 @@ export function useDeepgramSTT(): DeepgramSTTResult {
         return;
       }
 
+      // utterance_end_ms=1500 — Deepgram fires UtteranceEnd event when
+      // silence exceeds 1.5s after the last final transcript
       const ws = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=300`,
+        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=300&utterance_end_ms=1500`,
         ["token", dgKey]
       );
       websocketRef.current = ws;
@@ -147,6 +160,19 @@ export function useDeepgramSTT(): DeepgramSTTResult {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+
+          // Handle UtteranceEnd event — user stopped speaking
+          if (data.type === "UtteranceEnd") {
+            const text = finalTranscriptRef.current.trim();
+            if (text && onUtteranceEndRef.current) {
+              onUtteranceEndRef.current(text);
+              // Reset transcript for next utterance
+              finalTranscriptRef.current = "";
+              setTranscript("");
+            }
+            return;
+          }
+
           if (data.channel?.alternatives?.[0]) {
             const alt = data.channel.alternatives[0];
             if (data.is_final) {
@@ -172,10 +198,7 @@ export function useDeepgramSTT(): DeepgramSTTResult {
       };
 
       ws.onclose = () => {
-        // Only set error if unexpected close while listening
-        if (isListening) {
-          // Will be cleaned up by stopListening
-        }
+        // Cleanup happens via stopListening or error handler
       };
 
       setIsListening(true);
@@ -184,12 +207,14 @@ export function useDeepgramSTT(): DeepgramSTTResult {
       setError(msg);
       cleanup();
     }
-  }, [cleanup, updateAmplitude, isListening]);
+  }, [cleanup, updateAmplitude]);
 
   const stopListening = useCallback(() => {
     cleanup();
     setIsListening(false);
     const final = finalTranscriptRef.current;
+    finalTranscriptRef.current = "";
+    setTranscript("");
     return final;
   }, [cleanup]);
 
