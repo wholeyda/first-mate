@@ -138,8 +138,8 @@ export function CentralStar({
     // Voice amplitude → scale animation (smooth lerp)
     // In voice mode: base scale is 1.4 (planet is larger) + amplitude drives further growth
     // In normal mode: base 1.0 + small amplitude wiggle
-    const baseScale = voiceMode ? 1.15 : 1.0;
-    const targetScale = baseScale + voiceAmplitude * 2.0;
+    const baseScale = voiceMode ? 1.08 : 1.0;
+    const targetScale = baseScale + voiceAmplitude * 0.6;
     scaleRef.current += (targetScale - scaleRef.current) * 0.10;
 
     // Slow rotation + scale

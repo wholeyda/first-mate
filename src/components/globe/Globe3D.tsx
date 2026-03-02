@@ -193,7 +193,7 @@ function CameraController({ voiceMode }: { voiceMode: boolean }) {
   useEffect(() => {
     // When entering voice mode: zoom in close, center vertically
     // When exiting: zoom back out to default position
-    targetZRef.current = voiceMode ? 10 : CAMERA_DISTANCE;
+    targetZRef.current = voiceMode ? 15 : CAMERA_DISTANCE;
     targetYRef.current = voiceMode ? 0 : 3;
   }, [voiceMode]);
 
