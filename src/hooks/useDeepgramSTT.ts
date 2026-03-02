@@ -125,24 +125,30 @@ export function useDeepgramSTT(
       // Start amplitude monitoring
       animFrameRef.current = requestAnimationFrame(updateAmplitude);
 
-      // 3. Open Deepgram WebSocket
-      const dgKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY;
-      if (!dgKey || dgKey === "placeholder") {
-        setError("Deepgram API key not configured");
+      // 3. Fetch a short-lived Deepgram token from our server
+      // (keeps master API key off the client)
+      let dgToken: string;
+      try {
+        const tokenRes = await fetch("/api/voice/token");
+        if (!tokenRes.ok) throw new Error("Token fetch failed");
+        const tokenData = await tokenRes.json();
+        dgToken = tokenData.token;
+        if (!dgToken) throw new Error("No token in response");
+      } catch (err) {
+        setError("Could not connect to voice service");
         cleanup();
         return;
       }
 
-      // utterance_end_ms=1500 — Deepgram fires UtteranceEnd event when
-      // silence exceeds 1.5s after the last final transcript
+      // 4. Open Deepgram WebSocket with short-lived token
       const ws = new WebSocket(
         `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=200&utterance_end_ms=900`,
-        ["token", dgKey]
+        ["token", dgToken]
       );
       websocketRef.current = ws;
 
       ws.onopen = () => {
-        // 4. Start MediaRecorder to send audio chunks
+        // 5. Start MediaRecorder to send audio chunks
         // Safari doesn't support webm — pick a supported format
         const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
           ? "audio/webm;codecs=opus"

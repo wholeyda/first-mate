@@ -641,7 +641,7 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           {/* Top area: live transcript */}
           <div className="flex flex-col items-center gap-2 pointer-events-none">
             {voiceState === "listening" && transcript && (
-              <p className="text-white/60 text-sm text-center max-w-xs px-4 leading-relaxed">
+              <p className={`text-sm text-center max-w-xs px-4 leading-relaxed ${isDarkMode ? "text-white/60" : "text-black/50"}`}>
                 {transcript}
               </p>
             )}
@@ -650,14 +650,14 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           {/* Bottom area: status label + exit button */}
           <div className="flex flex-col items-center gap-5 pointer-events-auto">
             {/* Status */}
-            <p className="text-white/50 text-xs font-medium tracking-widest uppercase">
+            <p className={`text-xs font-medium tracking-widest uppercase ${isDarkMode ? "text-white/50" : "text-black/40"}`}>
               {voiceStatusLabel}
             </p>
 
             {/* Voice preference toggle */}
             <button
               onClick={toggleVoicePreference}
-              className="text-white/30 text-[10px] hover:text-white/60 transition-colors cursor-pointer tracking-wide"
+              className={`text-[10px] transition-colors cursor-pointer tracking-wide ${isDarkMode ? "text-white/30 hover:text-white/60" : "text-black/30 hover:text-black/60"}`}
             >
               {voicePreference === "female" ? "♀ Female" : "♂ Male"}
             </button>
@@ -665,17 +665,21 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
             {/* Exit button — simple tap */}
             <button
               onClick={exitVoiceMode}
-              className="w-12 h-12 rounded-full flex items-center justify-center bg-white/8 hover:bg-white/15 border border-white/15 transition-all duration-200 cursor-pointer"
+              className={`w-12 h-12 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
+                isDarkMode
+                  ? "bg-white/8 hover:bg-white/15 border-white/15"
+                  : "bg-black/5 hover:bg-black/10 border-black/15"
+              }`}
               title="Exit voice mode"
             >
-              <svg className="w-4 h-4 text-white/50" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <svg className={`w-4 h-4 ${isDarkMode ? "text-white/50" : "text-black/40"}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
             {/* STT error */}
             {sttError && (
-              <p className="text-red-400/70 text-[10px]">{sttError}</p>
+              <p className="text-red-500/70 text-[10px]">{sttError}</p>
             )}
           </div>
         </div>
