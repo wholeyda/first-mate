@@ -42,6 +42,7 @@ interface ChatProps {
   onHistoryCleared?: () => void;
   starConfig?: StarConfig;
   onStarClick?: () => void;
+  userName?: string;
 }
 
 type VoiceState = "idle" | "listening" | "processing" | "speaking";
@@ -73,7 +74,7 @@ function detectQuickReplies(text: string): string[] {
   return [];
 }
 
-export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared, starConfig, onStarClick }: ChatProps) {
+export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared, starConfig, onStarClick, userName }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -553,9 +554,18 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         safariAudioUnlockedRef.current = true;
       }
 
-      setVoiceState("listening");
-      voiceStateRef.current = "listening";
-      startListening();
+      // Play greeting, then start listening after it finishes
+      const greeting = userName
+        ? `Hey ${userName}! This is First Mate. What do we want to accomplish?`
+        : `Hey! This is First Mate. What do we want to accomplish?`;
+
+      // Set to speaking state for the greeting, then transition to listening
+      setVoiceState("speaking");
+      voiceStateRef.current = "speaking";
+
+      playTTSRef.current(greeting).then(() => {
+        // playTTSRef handles transitioning to "listening" + startListening on finish
+      });
     }
   }
 

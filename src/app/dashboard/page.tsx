@@ -61,6 +61,12 @@ export default async function DashboardPage() {
     .single();
   const hasSeenOnboarding = userProfile?.has_seen_onboarding ?? false;
 
+  // Extract first name from Google OAuth metadata or email
+  const fullName = user.user_metadata?.full_name as string | undefined;
+  const firstName = fullName
+    ? fullName.split(" ")[0]
+    : (user.email ?? "").split("@")[0];
+
   return (
     <div className="h-screen bg-white dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* Top bar */}
@@ -82,6 +88,7 @@ export default async function DashboardPage() {
         initialSubGoals={subGoals}
         completedGoalCount={completedCount || 0}
         hasSeenOnboarding={hasSeenOnboarding}
+        userName={firstName}
       />
     </div>
   );

@@ -30,11 +30,12 @@ interface DashboardClientProps {
   initialSubGoals?: Array<Record<string, unknown>>;
   completedGoalCount?: number;
   hasSeenOnboarding?: boolean;
+  userName?: string;
 }
 
 type Tab = "chat" | "calendar" | "resume";
 
-export function DashboardClient({ initialGoals, initialSubGoals = [], completedGoalCount = 0, hasSeenOnboarding = true }: DashboardClientProps) {
+export function DashboardClient({ initialGoals, initialSubGoals = [], completedGoalCount = 0, hasSeenOnboarding = true, userName }: DashboardClientProps) {
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
   const [subGoals, setSubGoals] = useState<Array<Record<string, unknown>>>(initialSubGoals);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
@@ -283,7 +284,7 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         {/* Tab content */}
         <div className="flex-1 overflow-hidden">
           {activeTab === "chat" && (
-            <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} onHistoryCleared={handleHistoryCleared} starConfig={starConfig} onStarClick={handleStarClick} />
+            <Chat onGoalCreated={handleGoalCreated} islands={islands} onIslandRemoved={handleIslandRemoved} onHistoryCleared={handleHistoryCleared} starConfig={starConfig} onStarClick={handleStarClick} userName={userName} />
           )}
           {activeTab === "calendar" && <CalendarView />}
           {activeTab === "resume" && <ResumePanel />}
