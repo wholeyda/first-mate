@@ -89,13 +89,15 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   const [voicePreference, setVoicePreference] = useState<"male" | "female">("female");
   const [ttsAmplitude, setTtsAmplitude] = useState(0);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const ttsAnalyserRef = useRef<AnalyserNode | null>(null);
-  const ttsContextRef = useRef<AudioContext | null>(null);
   const ttsAnimRef = useRef<number>(0);
   const voiceStateRef = useRef<VoiceState>("idle");
   const messagesRef = useRef<Message[]>([]);
   const voicePreferenceRef = useRef<"male" | "female">("female");
   const playTTSRef = useRef<(text: string) => Promise<void>>(async () => {});
+  // Safari requires AudioContext to be created during a user gesture.
+  // We create + immediately suspend it on the mic tap so it's "unlocked"
+  // and can be resumed later for TTS playback without autoplay blocking.
+  const safariAudioUnlockedRef = useRef(false);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -440,6 +442,15 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     playTTSRef.current = async (text: string) => {
       setVoiceState("speaking");
       voiceStateRef.current = "speaking";
+
+      function resumeListening() {
+        if (voiceStateRef.current !== "idle") {
+          setVoiceState("listening");
+          voiceStateRef.current = "listening";
+          startListening();
+        }
+      }
+
       try {
         const res = await fetch("/api/voice/tts", {
           method: "POST",
@@ -450,80 +461,57 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         if (!res.ok) {
           const errBody = await res.text().catch(() => "");
           console.error("TTS API error:", res.status, errBody);
-          throw new Error("TTS failed");
+          throw new Error(`TTS failed: ${res.status} ${errBody}`);
         }
 
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
+
+        // Create and attach audio element to DOM for Safari compatibility
+        // Safari requires audio elements in the DOM to use Web Audio API
+        const audio = document.createElement("audio");
+        audio.style.display = "none";
+        audio.preload = "auto";
+        document.body.appendChild(audio);
         ttsAudioRef.current = audio;
 
-        // Set up AudioContext + AnalyserNode for TTS amplitude
-        // Resume context if suspended (Chrome autoplay policy)
-        const audioCtx = new AudioContext();
-        if (audioCtx.state === "suspended") {
-          await audioCtx.resume();
+        // Use a simple sinusoidal pulse for TTS amplitude (avoids AudioContext
+        // autoplay restrictions on Safari — Web Audio needs a user gesture context)
+        let pulseT = 0;
+        function pulseTtsAmplitude() {
+          pulseT += 0.05;
+          const pulse = 0.25 + Math.sin(pulseT * 3.5) * 0.15;
+          setTtsAmplitude(pulse);
+          ttsAnimRef.current = requestAnimationFrame(pulseTtsAmplitude);
         }
-        ttsContextRef.current = audioCtx;
-        const source = audioCtx.createMediaElementSource(audio);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        analyser.connect(audioCtx.destination);
-        ttsAnalyserRef.current = analyser;
-
-        // Start TTS amplitude monitoring
-        function updateTtsAmplitude() {
-          if (!ttsAnalyserRef.current) return;
-          const data = new Uint8Array(ttsAnalyserRef.current.frequencyBinCount);
-          ttsAnalyserRef.current.getByteFrequencyData(data);
-          const sum = data.reduce((a, b) => a + b, 0);
-          const avg = sum / data.length / 255;
-          setTtsAmplitude(avg);
-          ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
-        }
-        ttsAnimRef.current = requestAnimationFrame(updateTtsAmplitude);
+        ttsAnimRef.current = requestAnimationFrame(pulseTtsAmplitude);
 
         audio.onended = () => {
-          // Cleanup TTS audio resources
           cancelAnimationFrame(ttsAnimRef.current);
           setTtsAmplitude(0);
           URL.revokeObjectURL(url);
-          if (ttsContextRef.current && ttsContextRef.current.state !== "closed") {
-            ttsContextRef.current.close();
-          }
-          ttsContextRef.current = null;
-          ttsAnalyserRef.current = null;
+          if (audio.parentNode) audio.parentNode.removeChild(audio);
           ttsAudioRef.current = null;
-
-          // If still in voice mode, go back to listening automatically
-          if (voiceStateRef.current !== "idle") {
-            setVoiceState("listening");
-            voiceStateRef.current = "listening";
-            startListening();
-          }
+          resumeListening();
         };
 
         audio.onerror = (e) => {
           console.error("Audio playback error:", e);
-          // Fall back to listening
-          if (voiceStateRef.current !== "idle") {
-            setVoiceState("listening");
-            voiceStateRef.current = "listening";
-            startListening();
-          }
+          cancelAnimationFrame(ttsAnimRef.current);
+          setTtsAmplitude(0);
+          URL.revokeObjectURL(url);
+          if (audio.parentNode) audio.parentNode.removeChild(audio);
+          ttsAudioRef.current = null;
+          resumeListening();
         };
 
+        audio.src = url;
         await audio.play();
       } catch (err) {
         console.error("TTS playback error:", err);
-        // Fall back — go back to listening if still in voice mode
-        const currentState = voiceStateRef.current as string;
-        if (currentState !== "idle") {
-          setVoiceState("listening");
-          voiceStateRef.current = "listening";
-          startListening();
-        }
+        cancelAnimationFrame(ttsAnimRef.current);
+        setTtsAmplitude(0);
+        resumeListening();
       }
     };
   }, [startListening]);
@@ -531,6 +519,40 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
   // ---- Tap to enter voice mode ----
   function handleTalkClick() {
     if (voiceStateRef.current === "idle") {
+      // Unlock audio autoplay on Safari.
+      // Safari requires audio.play() to be called during a user gesture.
+      // Playing a silent 0-duration audio now primes the audio session
+      // so TTS can play later without being blocked.
+      if (!safariAudioUnlockedRef.current) {
+        try {
+          // Method 1: Silent AudioContext pulse
+          const ctx = new AudioContext();
+          const buf = ctx.createBuffer(1, 1, 22050);
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(ctx.destination);
+          src.start(0);
+          ctx.close();
+        } catch {
+          // Non-critical
+        }
+        try {
+          // Method 2: Silent HTML audio element — more reliably unlocks Safari
+          const silentAudio = document.createElement("audio");
+          silentAudio.style.display = "none";
+          // Shortest valid MP3: 44 bytes of silence
+          silentAudio.src = "data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
+          document.body.appendChild(silentAudio);
+          silentAudio.play().catch(() => {});
+          setTimeout(() => {
+            if (silentAudio.parentNode) silentAudio.parentNode.removeChild(silentAudio);
+          }, 500);
+        } catch {
+          // Non-critical
+        }
+        safariAudioUnlockedRef.current = true;
+      }
+
       setVoiceState("listening");
       voiceStateRef.current = "listening";
       startListening();
@@ -545,14 +567,12 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
     // Stop TTS
     if (ttsAudioRef.current) {
       ttsAudioRef.current.pause();
+      if (ttsAudioRef.current.parentNode) {
+        ttsAudioRef.current.parentNode.removeChild(ttsAudioRef.current);
+      }
       ttsAudioRef.current = null;
     }
     if (ttsAnimRef.current) cancelAnimationFrame(ttsAnimRef.current);
-    if (ttsContextRef.current && ttsContextRef.current.state !== "closed") {
-      ttsContextRef.current.close();
-    }
-    ttsContextRef.current = null;
-    ttsAnalyserRef.current = null;
     setTtsAmplitude(0);
     setVoiceState("idle");
     voiceStateRef.current = "idle";
