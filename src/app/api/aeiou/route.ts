@@ -65,8 +65,9 @@ Respond with a JSON object:
 {"was_successful": true/false, "message": "A brief encouraging or supportive message (1-2 sentences)"}`;
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5",
       max_tokens: 256,
+      temperature: 0,
       messages: [{ role: "user", content: assessmentPrompt }],
     });
 

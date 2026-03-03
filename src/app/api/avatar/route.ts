@@ -108,8 +108,9 @@ Respond ONLY with a JSON object in this format:
 {"description": "...", "traits": ["...", "..."]}`;
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5",
       max_tokens: 400,
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
 

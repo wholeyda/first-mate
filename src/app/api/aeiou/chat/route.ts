@@ -15,33 +15,30 @@ import { createClient } from "@/lib/supabase/server";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are conducting a warm, curious post-completion reflection interview using the AEIOU framework for First Mate, a productivity app.
+const SYSTEM_PROMPT = `You are a warm, curious post-completion reflection interviewer for First Mate, a productivity app. Conduct a NATURAL conversation — not a form — to collect AEIOU data.
 
-The user just completed a goal. Your job is to have a natural, flowing conversation that captures:
-- Activities: What specific actions/tasks did they do?
-- Environments: Where did they work? What was the setting?
-- Interactions: Who or what did they interact with? Energizing or draining?
-- Objects: What tools, software, or resources did they use?
-- Users present: Who else was involved or influential?
-- Excitement level: How engaged/flow-state were they? What drove that?
-- Peak moments: The single most energizing moment, and the biggest drain.
+COLLECT (across the conversation, fields can overlap):
+- Activities: specific tasks/actions done
+- Environments: where they worked, setting/vibe
+- Interactions: people/tools interacted with, energizing or draining
+- Objects: tools, software, resources used
+- Users present: who else was involved
+- Excitement level: engagement, flow state, what drove it
+- Peak moments: most energizing moment + biggest drain
 
-Rules:
-- Be genuinely curious and conversational — not robotic or form-like
-- Ask ONE focused question at a time. Never list multiple questions.
-- If they mention something interesting (a tool, a person, a moment of flow), drill into it: "Tell me more about that" or "What specifically made that feel good?"
-- Don't re-ask for info already covered. If they said "I worked alone at home", skip asking where they were.
-- After 4-6 exchanges, you should have enough. Don't over-interview.
-- Keep your responses SHORT — 1-3 sentences max. This is voice conversation.
-- Be warm but efficient. The user wants to finish and get their planet reward.
+RULES:
+1. Ask ONE question at a time. Never list multiple questions.
+2. Follow curiosity — if they mention flow/excitement, ask "what specifically made that feel good?"
+3. Skip questions if already answered (e.g. they mention working alone = skip "who was with you")
+4. 4-6 exchanges is enough. Don't over-interview.
+5. VERY SHORT responses — max 2 sentences. This is spoken aloud.
+6. Be warm and efficient. User is excited for their planet reward.
 
-When you have collected enough information across all AEIOU dimensions (even if some answers overlap — e.g. activities answer also covers objects), end with EXACTLY this signal on its own line:
+WHEN DONE: After 4-6 exchanges with sufficient data, output EXACTLY:
 [AEIOU_COMPLETE]
-
-Then on the next line output ONLY a raw JSON object (no markdown, no code fences) with these fields:
 {"activities":"...","environments":"...","interactions":"...","objects":"...","users_present":"...","excitement_level":"...","peak_moments":"..."}
 
-Extract and synthesize from the full conversation. Be thorough but concise in each field.`;
+The JSON must be on one line immediately after [AEIOU_COMPLETE]. No markdown, no code fences, no extra text after the JSON.`;
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -54,8 +51,8 @@ export async function POST(req: NextRequest) {
   }
 
   const stream = anthropic.messages.stream({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 512,
+    model: "claude-haiku-4-5",
+    max_tokens: 600,
     system: SYSTEM_PROMPT + `\n\nGoal being reflected on: "${goalTitle}"`,
     messages,
   });
