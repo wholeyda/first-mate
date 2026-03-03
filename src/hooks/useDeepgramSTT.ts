@@ -1,13 +1,14 @@
 /**
- * useDeepgramSTT — Real-time STT via rolling chunk transcription
+ * useDeepgramSTT — Speech-to-text via server-side Deepgram proxy
  *
- * Sends audio to Deepgram every ROLLING_MS while speaking, so transcription
- * happens in parallel with recording (no waiting for full utterance).
- * On silence, flushes any remaining audio and fires onUtteranceEnd.
+ * Records the full utterance, then sends it as one complete audio file
+ * when silence is detected. This works reliably across all browsers:
+ * - Chrome/Firefox: audio/webm (supports streaming chunks)
+ * - Safari: audio/mp4 (requires complete file — no partial chunks)
  *
- * Why chunked HTTP and not WebSocket?
+ * Why not WebSocket directly to Deepgram?
  * - Browser WebSocket cannot set Authorization headers
- * - Safari rejects subprotocol ["token", key]
+ * - Safari rejects subprotocol auth ["token", key]
  * - Deepgram does not support ?token= URL query param
  */
 
@@ -15,17 +16,17 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-// Send accumulated audio every N ms while the user is actively speaking
-const ROLLING_MS = 3000;
-
-// Small MediaRecorder timeslice for smooth buffering
+// MediaRecorder timeslice — small so we accumulate smoothly
 const TIMESLICE_MS = 100;
 
 // RMS below this = silence
 const SILENCE_THRESHOLD = 0.012;
 
-// Silence must persist this long before we flush + fire callback (ms)
-const SILENCE_MS = 1200;
+// Silence must persist this long before we send (ms)
+const SILENCE_MS = 1100;
+
+// Minimum speech detected before we'll send (avoids sending noise)
+const MIN_SPEECH_CHUNKS = 5; // ~500ms of actual speech
 
 interface DeepgramSTTResult {
   startListening: () => Promise<void>;
@@ -53,76 +54,82 @@ export function useDeepgramSTT(
   const isListeningRef = useRef(false);
   const onUtteranceEndRef = useRef(onUtteranceEnd);
 
-  // Accumulated transcript words from all sent chunks
-  const accumulatedRef = useRef("");
-  // Chunks buffered since the last send
-  const pendingChunksRef = useRef<Blob[]>([]);
-  // Whether we've detected real speech (above threshold)
+  // All audio chunks buffered since startListening
+  const allChunksRef = useRef<Blob[]>([]);
+  // Chunks that contain actual speech (above threshold)
+  const speechChunkCountRef = useRef(0);
+  // Whether we've seen speech above threshold
   const hasSpeechRef = useRef(false);
-  // Whether we're currently sending a chunk (don't stack requests)
-  const sendingRef = useRef(false);
-  // Whether utterance has already been fired for this session
+  // Whether the final send has fired
   const firedRef = useRef(false);
+  // Whether a send is in progress
+  const sendingRef = useRef(false);
 
-  // Silence / rolling-send timers
+  // Silence timer
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     onUtteranceEndRef.current = onUtteranceEnd;
   }, [onUtteranceEnd]);
 
-  // Send whatever is in pendingChunksRef to Deepgram
-  const flushChunks = useCallback(async (isFinal: boolean) => {
-    if (pendingChunksRef.current.length === 0) return;
-    if (sendingRef.current) return;
+  const sendUtterance = useCallback(async () => {
+    if (firedRef.current || sendingRef.current) return;
+    if (allChunksRef.current.length === 0) return;
+    if (speechChunkCountRef.current < MIN_SPEECH_CHUNKS) return;
 
-    const chunks = pendingChunksRef.current.splice(0);
-    const mimeType = mimeTypeRef.current || "audio/webm";
-    const blob = new Blob(chunks, { type: mimeType });
-
-    if (blob.size < 1500) return; // too small, likely silence
-
+    firedRef.current = true;
     sendingRef.current = true;
+
+    const chunks = allChunksRef.current.slice();
+    const mimeType = mimeTypeRef.current || "audio/webm";
+    // Strip codec params for Deepgram — just the base mime type
+    const baseMime = mimeType.split(";")[0].trim();
+    const blob = new Blob(chunks, { type: baseMime });
+
+    // Show "processing" in transcript while we wait
+    setTranscript("...");
+
     try {
       const res = await fetch("/api/voice/transcribe", {
         method: "POST",
-        headers: { "Content-Type": mimeType },
+        headers: { "Content-Type": baseMime },
         body: blob,
       });
 
       if (!res.ok) {
-        console.error("[STT] transcribe error:", res.status);
+        const errData = await res.json().catch(() => ({}));
+        console.error("[STT] transcribe error:", res.status, errData);
+        setTranscript("");
+        sendingRef.current = false;
+        firedRef.current = false;
         return;
       }
 
       const data = await res.json();
       const text = (data.transcript ?? "").trim();
 
-      if (text) {
-        // Append to accumulated — avoid duplicating if Deepgram repeats words
-        const prev = accumulatedRef.current;
-        accumulatedRef.current = prev ? `${prev} ${text}` : text;
-        setTranscript(accumulatedRef.current);
-      }
+      setTranscript(text || "");
 
-      if (isFinal && !firedRef.current) {
-        const full = accumulatedRef.current.trim();
-        if (full) {
-          firedRef.current = true;
-          accumulatedRef.current = "";
-          setTranscript("");
-          onUtteranceEndRef.current?.(full);
-        }
+      if (text && isListeningRef.current) {
+        onUtteranceEndRef.current?.(text);
+        setTranscript("");
+      } else if (!text) {
+        // No speech detected — reset and keep listening
+        firedRef.current = false;
+        allChunksRef.current = [];
+        speechChunkCountRef.current = 0;
+        hasSpeechRef.current = false;
       }
     } catch (err) {
-      console.error("[STT] flush error:", err);
+      console.error("[STT] send error:", err);
+      setTranscript("");
+      firedRef.current = false;
     } finally {
       sendingRef.current = false;
     }
   }, []);
 
-  // Amplitude loop — also drives silence detection
+  // Amplitude loop + silence detection
   const updateAmplitude = useCallback(() => {
     if (!analyserRef.current) return;
 
@@ -138,7 +145,6 @@ export function useDeepgramSTT(
     setAudioAmplitude(Math.min(rms * 5, 1));
 
     if (rms > SILENCE_THRESHOLD) {
-      // Active speech
       hasSpeechRef.current = true;
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -149,39 +155,33 @@ export function useDeepgramSTT(
       isListeningRef.current &&
       hasSpeechRef.current &&
       !firedRef.current &&
+      !sendingRef.current &&
       !silenceTimerRef.current
     ) {
-      // Silence after speech — countdown to final flush
       silenceTimerRef.current = setTimeout(() => {
         silenceTimerRef.current = null;
-        if (!firedRef.current && isListeningRef.current) {
-          // Stop rolling sends, do one final flush
-          if (rollingTimerRef.current) {
-            clearInterval(rollingTimerRef.current);
-            rollingTimerRef.current = null;
-          }
-          flushChunks(true);
+        if (isListeningRef.current && !firedRef.current && !sendingRef.current) {
+          sendUtterance();
         }
       }, SILENCE_MS);
     }
 
     animFrameRef.current = requestAnimationFrame(updateAmplitude);
-  }, [flushChunks]);
+  }, [sendUtterance]);
 
   const cleanup = useCallback(() => {
     isListeningRef.current = false;
 
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
-    if (rollingTimerRef.current) { clearInterval(rollingTimerRef.current); rollingTimerRef.current = null; }
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+      try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
     }
     mediaRecorderRef.current = null;
 
     if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-      audioContextRef.current.close();
+      audioContextRef.current.close().catch(() => {});
     }
     audioContextRef.current = null;
     analyserRef.current = null;
@@ -191,8 +191,9 @@ export function useDeepgramSTT(
       mediaStreamRef.current = null;
     }
 
-    pendingChunksRef.current = [];
+    allChunksRef.current = [];
     hasSpeechRef.current = false;
+    speechChunkCountRef.current = 0;
     setAudioAmplitude(0);
   }, []);
 
@@ -201,8 +202,8 @@ export function useDeepgramSTT(
   const startListening = useCallback(async () => {
     setError(null);
     setTranscript("");
-    accumulatedRef.current = "";
-    pendingChunksRef.current = [];
+    allChunksRef.current = [];
+    speechChunkCountRef.current = 0;
     hasSpeechRef.current = false;
     firedRef.current = false;
     sendingRef.current = false;
@@ -223,6 +224,7 @@ export function useDeepgramSTT(
       isListeningRef.current = true;
       animFrameRef.current = requestAnimationFrame(updateAmplitude);
 
+      // Pick best format — prefer webm for Chrome, mp4 for Safari
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/mp4")
@@ -234,20 +236,16 @@ export function useDeepgramSTT(
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && isListeningRef.current) {
-          pendingChunksRef.current.push(event.data);
+        if (event.data && event.data.size > 0 && isListeningRef.current) {
+          allChunksRef.current.push(event.data);
+          // Count chunks that arrive while speech is active
+          if (hasSpeechRef.current) {
+            speechChunkCountRef.current++;
+          }
         }
       };
 
       recorder.start(TIMESLICE_MS);
-
-      // Rolling flush — sends accumulated audio every ROLLING_MS while speaking
-      rollingTimerRef.current = setInterval(() => {
-        if (hasSpeechRef.current && !firedRef.current && isListeningRef.current) {
-          flushChunks(false);
-        }
-      }, ROLLING_MS);
-
       setIsListening(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to start mic";
@@ -255,7 +253,7 @@ export function useDeepgramSTT(
       setError(msg);
       cleanup();
     }
-  }, [cleanup, updateAmplitude, flushChunks]);
+  }, [cleanup, updateAmplitude]);
 
   const stopListening = useCallback(() => {
     cleanup();
