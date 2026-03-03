@@ -1,48 +1,47 @@
 /**
- * useDeepgramSTT — Real-time speech-to-text via server-side proxy
+ * useDeepgramSTT — Speech-to-text via server-side Deepgram proxy
  *
- * Records mic audio in short chunks and POSTs them to /api/voice/transcribe,
- * which forwards to Deepgram's REST API with a server-side Authorization header.
+ * Strategy: buffer ALL audio while the user speaks, then send the
+ * entire utterance as one blob when silence is detected.
  *
  * Why not WebSocket directly to Deepgram?
  * - Browser WebSocket cannot set Authorization headers
  * - Safari rejects subprotocol auth ["token", key]
  * - Deepgram does NOT support ?token= URL query param
  *
- * Architecture:
- * 1. AudioContext AnalyserNode monitors mic amplitude for planet animation
- * 2. MediaRecorder collects audio chunks every CHUNK_MS milliseconds
- * 3. When enough audio accumulates, it's POSTed to /api/voice/transcribe
- * 4. Silence detection: when amplitude stays below threshold for SILENCE_MS,
- *    the accumulated transcript is fired via onUtteranceEnd callback
- * 5. Audio is also exposed as audioAmplitude (0-1) for planet animations
+ * Flow:
+ * 1. MediaRecorder fires small chunks every 250ms into a buffer array
+ * 2. AnalyserNode monitors RMS amplitude at 60fps
+ * 3. When RMS drops below SILENCE_THRESHOLD for SILENCE_MS:
+ *    - Concatenate all buffered chunks into one blob
+ *    - POST the full utterance blob to /api/voice/transcribe
+ *    - Fire onUtteranceEnd with the transcript
+ * 4. audioAmplitude (0-1) exposed for planet animation
  */
 
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-// How often MediaRecorder fires ondataavailable
-const CHUNK_MS = 2000;
+// Small chunks — just for buffering, not individual transcription
+const CHUNK_MS = 250;
 
 // RMS amplitude below this = silence
-const SILENCE_THRESHOLD = 0.015;
+const SILENCE_THRESHOLD = 0.012;
 
-// How long silence must persist before auto-send fires (ms)
-const SILENCE_MS = 1200;
+// How long silence must persist before we send (ms)
+const SILENCE_MS = 1400;
+
+// Minimum audio duration before we attempt transcription (ms)
+// Prevents sending tiny blobs from background noise
+const MIN_SPEECH_MS = 300;
 
 interface DeepgramSTTResult {
-  /** Start capturing mic and streaming to Deepgram */
   startListening: () => Promise<void>;
-  /** Stop mic and return the final transcript */
   stopListening: () => string;
-  /** Real-time transcript (updates as user speaks) */
   transcript: string;
-  /** Whether the mic is currently active */
   isListening: boolean;
-  /** Current mic audio amplitude (0-1) for planet animation */
   audioAmplitude: number;
-  /** Error message if something went wrong */
   error: string | null;
 }
 
@@ -59,176 +58,189 @@ export function useDeepgramSTT(
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number>(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const finalTranscriptRef = useRef("");
   const onUtteranceEndRef = useRef(onUtteranceEnd);
   const isListeningRef = useRef(false);
+  const mimeTypeRef = useRef("");
+
+  // Audio buffering — collect ALL chunks, send on silence
+  const audioChunksRef = useRef<Blob[]>([]);
+  const speechStartTimeRef = useRef<number>(0);
+  const hasSpeechRef = useRef(false);
 
   // Silence detection
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const utteranceFiredRef = useRef(false);
-  const processingChunkRef = useRef(false);
-  const mimeTypeRef = useRef("");
+  const isSendingRef = useRef(false);
 
   // Keep callback ref in sync
   useEffect(() => {
     onUtteranceEndRef.current = onUtteranceEnd;
   }, [onUtteranceEnd]);
 
-  // Amplitude monitoring loop (also drives silence detection)
-  const updateAmplitude = useCallback(() => {
-    if (!analyserRef.current) return;
+  // Send all buffered audio as one utterance
+  const sendUtterance = useCallback(async () => {
+    if (isSendingRef.current) return;
+    if (audioChunksRef.current.length === 0) return;
 
-    const data = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteTimeDomainData(data);
+    // Check minimum speech duration
+    const speechDuration = Date.now() - speechStartTimeRef.current;
+    if (speechDuration < MIN_SPEECH_MS && !hasSpeechRef.current) return;
 
-    // Compute RMS amplitude
-    let sumSq = 0;
-    for (let i = 0; i < data.length; i++) {
-      const s = (data[i] - 128) / 128;
-      sumSq += s * s;
-    }
-    const rms = Math.sqrt(sumSq / data.length);
-    setAudioAmplitude(Math.min(rms * 4, 1)); // scale up for visibility
+    isSendingRef.current = true;
 
-    // Silence detection — reset timer when user speaks
-    if (rms > SILENCE_THRESHOLD) {
-      // User is speaking — clear any pending silence timer
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
+    // Grab all buffered chunks and reset buffer immediately
+    const chunks = audioChunksRef.current.splice(0);
+    hasSpeechRef.current = false;
+    utteranceFiredRef.current = true;
+
+    const mimeType = mimeTypeRef.current || "audio/webm";
+    const blob = new Blob(chunks, { type: mimeType });
+
+    if (blob.size < 2000) {
+      // Too small — probably just background noise
+      isSendingRef.current = false;
       utteranceFiredRef.current = false;
-    } else if (
-      isListeningRef.current &&
-      finalTranscriptRef.current.trim() &&
-      !utteranceFiredRef.current &&
-      !silenceTimerRef.current
-    ) {
-      // Silence detected after speech — start countdown
-      silenceTimerRef.current = setTimeout(() => {
-        silenceTimerRef.current = null;
-        if (
-          isListeningRef.current &&
-          finalTranscriptRef.current.trim() &&
-          !utteranceFiredRef.current
-        ) {
-          utteranceFiredRef.current = true;
-          const text = finalTranscriptRef.current.trim();
-          finalTranscriptRef.current = "";
-          setTranscript("");
-          onUtteranceEndRef.current?.(text);
-        }
-      }, SILENCE_MS);
+      return;
     }
-
-    animFrameRef.current = requestAnimationFrame(updateAmplitude);
-  }, []);
-
-  const cleanup = useCallback(() => {
-    isListeningRef.current = false;
-
-    // Clear silence timer
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-
-    // Stop animation frame
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = 0;
-    }
-
-    // Stop media recorder
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    mediaRecorderRef.current = null;
-
-    // Close audio context
-    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-      audioContextRef.current.close();
-    }
-    audioContextRef.current = null;
-    analyserRef.current = null;
-
-    // Stop mic tracks
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      mediaStreamRef.current = null;
-    }
-
-    setAudioAmplitude(0);
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return cleanup;
-  }, [cleanup]);
-
-  // Send an audio chunk to our server proxy
-  const transcribeChunk = useCallback(async (blob: Blob) => {
-    if (blob.size < 1000 || processingChunkRef.current) return;
-    processingChunkRef.current = true;
 
     try {
       const res = await fetch("/api/voice/transcribe", {
         method: "POST",
-        headers: { "Content-Type": mimeTypeRef.current || blob.type || "audio/webm" },
+        headers: { "Content-Type": mimeType },
         body: blob,
       });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         console.error("[STT] Transcription error:", res.status, errData);
-        processingChunkRef.current = false;
+        isSendingRef.current = false;
+        utteranceFiredRef.current = false;
         return;
       }
 
       const data = await res.json();
-      const newText = data.transcript?.trim() ?? "";
+      const text = (data.transcript ?? "").trim();
 
-      if (newText) {
-        finalTranscriptRef.current =
-          finalTranscriptRef.current
-            ? `${finalTranscriptRef.current} ${newText}`
-            : newText;
-        setTranscript(finalTranscriptRef.current);
+      if (text && isListeningRef.current) {
+        setTranscript(text);
+        onUtteranceEndRef.current?.(text);
+        setTranscript("");
       }
     } catch (err) {
-      console.error("[STT] Chunk fetch error:", err);
+      console.error("[STT] Send error:", err);
     } finally {
-      processingChunkRef.current = false;
+      isSendingRef.current = false;
     }
   }, []);
+
+  // Amplitude monitoring + silence detection (runs at ~60fps)
+  const updateAmplitude = useCallback(() => {
+    if (!analyserRef.current) return;
+
+    const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+    analyserRef.current.getByteTimeDomainData(data);
+
+    // RMS amplitude
+    let sumSq = 0;
+    for (let i = 0; i < data.length; i++) {
+      const s = (data[i] - 128) / 128;
+      sumSq += s * s;
+    }
+    const rms = Math.sqrt(sumSq / data.length);
+    setAudioAmplitude(Math.min(rms * 5, 1));
+
+    if (rms > SILENCE_THRESHOLD) {
+      // User is speaking — clear silence timer, mark that we have real speech
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      if (!hasSpeechRef.current) {
+        hasSpeechRef.current = true;
+        speechStartTimeRef.current = Date.now();
+      }
+      utteranceFiredRef.current = false;
+    } else if (
+      isListeningRef.current &&
+      hasSpeechRef.current &&
+      !utteranceFiredRef.current &&
+      !silenceTimerRef.current &&
+      !isSendingRef.current
+    ) {
+      // Silence after speech — start countdown to send
+      silenceTimerRef.current = setTimeout(() => {
+        silenceTimerRef.current = null;
+        if (isListeningRef.current && !utteranceFiredRef.current && !isSendingRef.current) {
+          sendUtterance();
+        }
+      }, SILENCE_MS);
+    }
+
+    animFrameRef.current = requestAnimationFrame(updateAmplitude);
+  }, [sendUtterance]);
+
+  const cleanup = useCallback(() => {
+    isListeningRef.current = false;
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = 0;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
+
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close();
+    }
+    audioContextRef.current = null;
+    analyserRef.current = null;
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+
+    audioChunksRef.current = [];
+    hasSpeechRef.current = false;
+    setAudioAmplitude(0);
+  }, []);
+
+  useEffect(() => {
+    return cleanup;
+  }, [cleanup]);
 
   const startListening = useCallback(async () => {
     setError(null);
     setTranscript("");
-    finalTranscriptRef.current = "";
+    audioChunksRef.current = [];
+    hasSpeechRef.current = false;
     utteranceFiredRef.current = false;
+    isSendingRef.current = false;
 
     try {
-      // 1. Get mic access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
-      // 2. Set up AudioContext + AnalyserNode for amplitude & silence detection
+      // AudioContext for amplitude monitoring
       const audioCtx = new AudioContext();
       audioContextRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.8;
+      analyser.smoothingTimeConstant = 0.7;
       source.connect(analyser);
       analyserRef.current = analyser;
 
       isListeningRef.current = true;
-
-      // Start amplitude monitoring
       animFrameRef.current = requestAnimationFrame(updateAmplitude);
 
-      // 3. Pick supported MediaRecorder format
+      // Pick best supported format
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/mp4")
@@ -236,7 +248,7 @@ export function useDeepgramSTT(
         : "";
       mimeTypeRef.current = mimeType;
 
-      // 4. Start MediaRecorder — fires chunks to our proxy
+      // MediaRecorder buffers audio in small chunks
       const recorder = new MediaRecorder(
         stream,
         mimeType ? { mimeType } : undefined
@@ -245,7 +257,7 @@ export function useDeepgramSTT(
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0 && isListeningRef.current) {
-          transcribeChunk(event.data);
+          audioChunksRef.current.push(event.data);
         }
       };
 
@@ -257,15 +269,13 @@ export function useDeepgramSTT(
       setError(msg);
       cleanup();
     }
-  }, [cleanup, updateAmplitude, transcribeChunk]);
+  }, [cleanup, updateAmplitude]);
 
   const stopListening = useCallback(() => {
     cleanup();
     setIsListening(false);
-    const final = finalTranscriptRef.current;
-    finalTranscriptRef.current = "";
     setTranscript("");
-    return final;
+    return "";
   }, [cleanup]);
 
   return {
