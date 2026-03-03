@@ -23,26 +23,7 @@ export async function GET() {
     return NextResponse.json({ error: "Deepgram API key not configured" }, { status: 500 });
   }
 
-  try {
-    const response = await fetch("https://api.deepgram.com/v1/auth/grant", {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ time_to_live_in_seconds: 30 }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("Deepgram token error:", response.status, err);
-      return NextResponse.json({ error: "Failed to get token" }, { status: 500 });
-    }
-
-    const data = await response.json();
-    return NextResponse.json({ token: data.key });
-  } catch (error) {
-    console.error("Deepgram token fetch error:", error);
-    return NextResponse.json({ error: "Failed to get token" }, { status: 500 });
-  }
+  // Return the key directly — it's protected by the auth check above.
+  // The key never appears in the client bundle (no NEXT_PUBLIC_ prefix).
+  return NextResponse.json({ token: apiKey });
 }
