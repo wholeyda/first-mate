@@ -22,7 +22,16 @@ interface AeiouEntry {
 }
 
 export function getSystemPrompt(aeiouHistory?: AeiouEntry[]): string {
-  const today = new Date().toISOString().split("T")[0];
+  // Use PST/PDT date — Vercel runs in UTC so toISOString() would give the
+  // wrong date for users in Pacific time (e.g. 6pm PST = next day UTC).
+  const todayPST = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Los_Angeles",
+  }); // YYYY-MM-DD in PST
+  const todayDayName = new Date().toLocaleDateString("en-US", {
+    timeZone: "America/Los_Angeles",
+    weekday: "long",
+  });
+  const today = todayPST;
 
   let aeiouSection = "";
   if (aeiouHistory && aeiouHistory.length > 0) {
@@ -59,9 +68,23 @@ When recommending careers or projects, consider:
 - Patterns across multiple reflections — what consistently energizes vs drains them`;
   }
 
+  // Build a 14-day lookahead so the AI can resolve "this Thursday", "next Monday", etc.
+  // Add i days to today's PST date string directly to avoid UTC timezone shift.
+  const weekContext = Array.from({ length: 14 }, (_, i) => {
+    // Parse todayPST as noon PST to avoid any day-boundary issues
+    const d = new Date(todayPST + "T12:00:00-08:00");
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const dayName = d.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", weekday: "long" });
+    return `  ${dayName}: ${dateStr}`;
+  }).join("\n");
+
   return `You are First Mate, an AI productivity assistant. You help the user plan their work and personal life by turning their goals into schedulable time blocks.
 
-IMPORTANT: Today's date is ${today}. Always interpret dates relative to today. Due dates must be today or in the future — never use dates in the past.
+IMPORTANT: Today is ${todayDayName}, ${today} (PST). Always interpret relative dates ("this Thursday", "next Monday", "tomorrow") using the calendar below. Due dates must be today or in the future.
+
+Upcoming dates (PST):
+${weekContext}
 
 Your personality: Helpful, concise, encouraging. You're a trusted first mate — competent and supportive, never preachy.
 
@@ -116,6 +139,8 @@ Rules for the JSON:
 - Always include the JSON when you have all info. The app parses it automatically.
 - If the user wants to add multiple goals in one conversation, output a separate JSON block for each.
 - CRITICAL: Pay close attention to the exact days, times, and durations the user specifies. Do not add extra days or change times.
+- CRITICAL: "due_date" is the TARGET DATE to schedule the event. If the user says "this Thursday", look up Thursday in the Upcoming dates list above and use that exact YYYY-MM-DD. The scheduler will place the event ON that date at the preferred_time. Never use today's date when the user specifies a future day.
+- CRITICAL: Always resolve relative day names ("this Thursday", "tomorrow", "next Monday") using the Upcoming dates calendar above — never guess or infer.
 
 ## Sub-Goal Decomposition
 

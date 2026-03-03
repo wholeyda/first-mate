@@ -187,6 +187,15 @@ export function findNextSlot(
   const calendarType: "work" | "personal" = goal.is_work ? "work" : "personal";
   const durationMinutes = goal.duration_minutes ?? Math.min(goal.estimated_hours * 60, 120);
 
+  // If the goal has a specific due_date AND a preferred_time, the user almost
+  // certainly said "schedule for [day] at [time]". Start scanning from the
+  // due_date itself so we land on exactly that day, not the first available
+  // day between now and then.
+  //
+  // IMPORTANT: new Date("2026-03-05") parses as midnight UTC = 4pm PREVIOUS
+  // day in PST. Append T12:00:00 to anchor at noon and avoid day-shift.
+  const dueDate = new Date(goal.due_date + "T12:00:00");
+
   // If preferred time is set, try to find a slot at that time (in PST).
   // If the exact preferred_time is busy (e.g. back-to-back goals created
   // in sequence), try preferred_time + duration, + 2*duration, etc.
@@ -195,6 +204,31 @@ export function findNextSlot(
     const parsedTime = parsePreferredTime(goal.preferred_time);
     if (parsedTime) {
       const [prefHour, prefMinute] = parsedTime;
+
+      // First: try the exact due_date at preferred_time (back-to-back aware)
+      for (let backToBackOffset = 0; backToBackOffset < 8; backToBackOffset++) {
+        const offsetMinutes = backToBackOffset * durationMinutes;
+        const basePrefMinutes = prefHour * 60 + prefMinute + offsetMinutes;
+        const tryHour = Math.floor(basePrefMinutes / 60);
+        const tryMinute = basePrefMinutes % 60;
+        if (tryHour >= 21) break;
+
+        const blockStart = setTimeInPST(dueDate, tryHour, tryMinute);
+        if (blockStart > new Date()) {
+          const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
+          if (!hasConflict(blockStart, blockEnd, busySlots)) {
+            return {
+              goal_id: goal.id,
+              goal_title: goal.title,
+              calendar_type: calendarType,
+              start_time: blockStart.toISOString(),
+              end_time: blockEnd.toISOString(),
+            };
+          }
+        }
+      }
+
+      // Second: scan from today through endDate as fallback
       const currentDate = new Date(startDate);
 
       while (currentDate < endDate) {

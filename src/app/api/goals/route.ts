@@ -206,7 +206,8 @@ export async function POST(request: NextRequest) {
         const now = new Date();
         const twoWeeksOut = new Date(now);
         twoWeeksOut.setDate(twoWeeksOut.getDate() + 14);
-        const dueDate = new Date(savedGoal.due_date);
+        // Append T12:00:00 to avoid UTC midnight parsing as previous day in PST
+        const dueDate = new Date(savedGoal.due_date + "T12:00:00");
         const searchEnd = dueDate > twoWeeksOut ? dueDate : twoWeeksOut;
 
         const onTokenRefresh = makeTokenRefresher(supabase, user.id);
