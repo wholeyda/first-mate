@@ -187,7 +187,10 @@ export function findNextSlot(
   const calendarType: "work" | "personal" = goal.is_work ? "work" : "personal";
   const durationMinutes = goal.duration_minutes ?? Math.min(goal.estimated_hours * 60, 120);
 
-  // If preferred time is set, try to find a day at that time (in PST)
+  // If preferred time is set, try to find a slot at that time (in PST).
+  // If the exact preferred_time is busy (e.g. back-to-back goals created
+  // in sequence), try preferred_time + duration, + 2*duration, etc.
+  // up to 8 back-to-back slots before falling through to open search.
   if (goal.preferred_time) {
     const parsedTime = parsePreferredTime(goal.preferred_time);
     if (parsedTime) {
@@ -195,21 +198,30 @@ export function findNextSlot(
       const currentDate = new Date(startDate);
 
       while (currentDate < endDate) {
-        // Set the preferred time in PST
-        const blockStart = setTimeInPST(currentDate, prefHour, prefMinute);
+        // Try the exact preferred time, then adjacent slots if busy
+        for (let backToBackOffset = 0; backToBackOffset < 8; backToBackOffset++) {
+          const offsetMinutes = backToBackOffset * durationMinutes;
+          const basePrefMinutes = prefHour * 60 + prefMinute + offsetMinutes;
+          const tryHour = Math.floor(basePrefMinutes / 60);
+          const tryMinute = basePrefMinutes % 60;
 
-        // Skip if block start is in the past
-        if (blockStart > new Date()) {
-          const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
+          // Don't schedule past 9PM
+          if (tryHour >= 21) break;
 
-          if (!hasConflict(blockStart, blockEnd, busySlots)) {
-            return {
-              goal_id: goal.id,
-              goal_title: goal.title,
-              calendar_type: calendarType,
-              start_time: blockStart.toISOString(),
-              end_time: blockEnd.toISOString(),
-            };
+          const blockStart = setTimeInPST(currentDate, tryHour, tryMinute);
+
+          if (blockStart > new Date()) {
+            const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
+
+            if (!hasConflict(blockStart, blockEnd, busySlots)) {
+              return {
+                goal_id: goal.id,
+                goal_title: goal.title,
+                calendar_type: calendarType,
+                start_time: blockStart.toISOString(),
+                end_time: blockEnd.toISOString(),
+              };
+            }
           }
         }
 

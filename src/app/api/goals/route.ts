@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
         const searchEnd = dueDate > twoWeeksOut ? dueDate : twoWeeksOut;
 
         const onTokenRefresh = makeTokenRefresher(supabase, user.id);
-        const busySlots = await getBusySlots(
+        const busySlotsFromGoogle = await getBusySlots(
           profile.google_access_token,
           profile.google_refresh_token,
           personalId,
@@ -219,6 +219,22 @@ export async function POST(request: NextRequest) {
           searchEnd.toISOString(),
           onTokenRefresh
         );
+
+        // Also include any scheduled_blocks already in the DB for this user
+        // (catches back-to-back goals created in the same session before
+        // Google Calendar has had time to register the previous event)
+        const { data: existingBlocks } = await supabase
+          .from("scheduled_blocks")
+          .select("start_time, end_time")
+          .eq("user_id", user.id)
+          .gte("start_time", now.toISOString());
+
+        const dbBusySlots = (existingBlocks || []).map((b: { start_time: string; end_time: string }) => ({
+          start: new Date(b.start_time),
+          end: new Date(b.end_time),
+        }));
+
+        const busySlots = [...busySlotsFromGoogle, ...dbBusySlots];
 
         // Find time slot(s)
         let foundBlocks;

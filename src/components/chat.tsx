@@ -288,12 +288,12 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         });
       }
 
-      // Keep messagesRef in sync with the completed assistant reply
-      // (including the raw content with goal JSON so the full conversation
-      // history is sent to the API on the next turn)
+      // Keep messagesRef in sync with the completed assistant reply.
+      // Use cleanContent (goal JSON stripped) so the AI doesn't see its own
+      // previous goal_json blocks and re-output them on subsequent turns.
       messagesRef.current = [
         ...messagesRef.current,
-        { role: "assistant", content: assistantContent },
+        { role: "assistant", content: cleanContent || assistantContent },
       ];
 
       // If in voice mode, play TTS — strip scheduling status lines before speaking
