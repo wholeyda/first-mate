@@ -288,13 +288,26 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         });
       }
 
-      // If in voice mode, play TTS — then auto-resume listening
-      if (fromVoice && cleanContent) {
-        console.log("[Voice] Playing TTS for response, length:", cleanContent.length);
-        await playTTSRef.current(cleanContent);
+      // Keep messagesRef in sync with the completed assistant reply
+      // (including the raw content with goal JSON so the full conversation
+      // history is sent to the API on the next turn)
+      messagesRef.current = [
+        ...messagesRef.current,
+        { role: "assistant", content: assistantContent },
+      ];
+
+      // If in voice mode, play TTS — strip scheduling status lines before speaking
+      // (e.g. "Added to your work calendar: Mon, Mar 3..." — not natural spoken)
+      const ttsContent = cleanContent
+        .split("\n")
+        .filter((line) => !line.match(/^(Added to your|Proposed for your|check Calendar tab)/i))
+        .join("\n")
+        .trim();
+
+      if (fromVoice && ttsContent) {
+        await playTTSRef.current(ttsContent);
       } else if (fromVoice) {
-        console.log("[Voice] Skipping TTS — cleanContent empty:", !cleanContent, "fromVoice:", fromVoice);
-        // Still go back to listening even if no content to speak
+        // Nothing to speak — go straight back to listening
         if (voiceStateRef.current !== "idle") {
           setVoiceState("listening");
           voiceStateRef.current = "listening";
