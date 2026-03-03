@@ -142,10 +142,9 @@ export function useDeepgramSTT(
         return;
       }
 
-      // 4. Open Deepgram WebSocket with short-lived token
+      // 4. Open Deepgram WebSocket — token in URL query param (Safari rejects subprotocol auth)
       const ws = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=200&utterance_end_ms=900`,
-        ["token", dgToken]
+        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=200&utterance_end_ms=900&token=${dgToken}`
       );
       websocketRef.current = ws;
 
