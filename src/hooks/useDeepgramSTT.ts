@@ -130,11 +130,13 @@ export function useDeepgramSTT(
       let dgToken: string;
       try {
         const tokenRes = await fetch("/api/voice/token");
-        if (!tokenRes.ok) throw new Error("Token fetch failed");
         const tokenData = await tokenRes.json();
+        console.log("[Deepgram] Token fetch status:", tokenRes.status, "token length:", tokenData.token?.length, "error:", tokenData.error);
+        if (!tokenRes.ok) throw new Error(`Token fetch failed: ${tokenData.error}`);
         dgToken = tokenData.token;
         if (!dgToken) throw new Error("No token in response");
       } catch (err) {
+        console.error("[Deepgram] Token error:", err);
         setError("Could not connect to voice service");
         cleanup();
         return;
@@ -148,6 +150,7 @@ export function useDeepgramSTT(
       websocketRef.current = ws;
 
       ws.onopen = () => {
+        console.log("[Deepgram] WebSocket opened successfully");
         // 5. Start MediaRecorder to send audio chunks
         // Safari doesn't support webm — pick a supported format
         const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -201,14 +204,15 @@ export function useDeepgramSTT(
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (e) => {
+        console.error("[Deepgram] WebSocket error:", e);
         setError("Deepgram connection error");
         cleanup();
         setIsListening(false);
       };
 
-      ws.onclose = () => {
-        // Cleanup happens via stopListening or error handler
+      ws.onclose = (e) => {
+        console.warn("[Deepgram] WebSocket closed — code:", e.code, "reason:", e.reason, "wasClean:", e.wasClean);
       };
 
       setIsListening(true);
