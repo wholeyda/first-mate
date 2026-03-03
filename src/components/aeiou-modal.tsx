@@ -1,21 +1,22 @@
 /**
- * AEIOU Modal
+ * AEIOU Modal — Conversational reflection after goal completion.
  *
- * Full-screen overlay that guides the user through the AEIOU reflection:
- * Activities, Environments, Interactions, Objects, Users.
+ * Two modes:
+ * 1. Voice: tap mic, speak freely, AI asks follow-ups, auto-submits when done.
+ * 2. Text: type responses, same conversational AI flow.
  *
- * Plus engagement/excitement questions to understand what drives flow state.
- * Urges the user to be as specific as possible for better career insights.
- *
- * After collecting all answers, sends to AI for assessment.
- * On success → triggers planet creation. On failure → red globe flash.
+ * The AI (claude-sonnet) conducts a natural interview, drills into what the
+ * user enjoyed, avoids re-asking covered info, and signals [AEIOU_COMPLETE]
+ * when it has all fields — then we extract the JSON and call /api/aeiou.
  */
 
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Globe } from "@/components/globe";
 import { Goal } from "@/types/database";
+import { useDeepgramSTT } from "@/hooks/useDeepgramSTT";
+import { useTheme } from "@/components/theme-provider";
 
 interface AeiouModalProps {
   goal: Goal;
@@ -24,326 +25,584 @@ interface AeiouModalProps {
   onSuccess: (aeiouResponseId: string) => void;
 }
 
-type Step = "greeting" | "A" | "E" | "I" | "O" | "U" | "excitement" | "peak_moments" | "evaluating" | "success" | "failure";
-
-function generateQuestions(goal: Goal, previousAnswers: Record<string, string>): { key: Step; letter: string; question: string; hint?: string }[] {
-  const goalTitle = goal.title;
-
-  const questions: { key: Step; letter: string; question: string; hint?: string }[] = [];
-
-  // A - Activities (always specific to the goal)
-  questions.push({
-    key: "A",
-    letter: "A",
-    question: `What specific activities did you do to complete "${goalTitle}"? Walk me through the key actions step by step.`,
-    hint: `Think about the actual tasks — not just "coding" but what specifically you built, designed, or solved.`,
-  });
-
-  // E - Environments (context-aware)
-  questions.push({
-    key: "E",
-    letter: "E",
-    question: previousAnswers.activities
-      ? `You mentioned: "${previousAnswers.activities.slice(0, 80)}..." — where were you doing this? What was the setting like?`
-      : `Where did you work on "${goalTitle}"? Describe the environment, atmosphere, and vibe.`,
-    hint: "Physical space, noise, lighting, temperature — what made you comfortable or uncomfortable?",
-  });
-
-  // I - Interactions (skip people question if answer suggests solo work)
-  const activitiesLower = (previousAnswers.activities || "").toLowerCase();
-  const envLower = (previousAnswers.environments || "").toLowerCase();
-  const seemsSolo = activitiesLower.includes("alone") || activitiesLower.includes("by myself") ||
-    activitiesLower.includes("solo") || envLower.includes("alone") || envLower.includes("home office");
-
-  if (seemsSolo) {
-    questions.push({
-      key: "I",
-      letter: "I",
-      question: `It sounds like you worked independently on this. What tools, software, or resources did you interact with most? Were there any async interactions (Slack, email, forums)?`,
-      hint: "Even solo work involves interactions — with tools, documentation, online communities, or brief check-ins.",
-    });
-  } else {
-    questions.push({
-      key: "I",
-      letter: "I",
-      question: `Who did you interact with while working on "${goalTitle}"? Were these interactions energizing or draining?`,
-      hint: "Think about collaborations, meetings, pair work, feedback sessions — which ones fueled you?",
-    });
-  }
-
-  // O - Objects/Tools (context-aware based on previous answers)
-  const mentionedComputer = activitiesLower.includes("computer") || activitiesLower.includes("laptop") ||
-    activitiesLower.includes("screen") || activitiesLower.includes("coding") || activitiesLower.includes("code");
-
-  if (mentionedComputer) {
-    questions.push({
-      key: "O",
-      letter: "O",
-      question: `Beyond your computer, were there specific tools, frameworks, or resources that made a real difference in completing "${goalTitle}"?`,
-      hint: "Specific software, methodologies, reference materials, AI tools, physical tools — what was indispensable?",
-    });
-  } else {
-    questions.push({
-      key: "O",
-      letter: "O",
-      question: `What tools, objects, or devices were central to completing "${goalTitle}"?`,
-      hint: "Physical tools, digital tools, reference materials — anything you couldn't have done it without.",
-    });
-  }
-
-  // U - Users/People (skip or rephrase if solo)
-  if (seemsSolo) {
-    questions.push({
-      key: "U",
-      letter: "U",
-      question: `Even working solo, other people can influence your experience. Did anyone inspire, support, or challenge you during "${goalTitle}" — even indirectly?`,
-      hint: "Mentors, online communities, friends you bounced ideas off, even people whose work inspired you.",
-    });
-  } else {
-    questions.push({
-      key: "U",
-      letter: "U",
-      question: `Of the people involved in "${goalTitle}", who had the biggest impact on your experience — positive or negative? Why?`,
-    });
-  }
-
-  // Excitement (always specific)
-  questions.push({
-    key: "excitement",
-    letter: "!",
-    question: `On a scale from "total grind" to "pure flow state" — where did "${goalTitle}" land for you? What drove that feeling?`,
-    hint: "Be specific about what moments felt effortless vs. what moments felt like pulling teeth.",
-  });
-
-  // Peak moments (builds on all previous)
-  const previousSummary = Object.values(previousAnswers).filter(Boolean).join(" ").slice(0, 150);
-  questions.push({
-    key: "peak_moments",
-    letter: "★",
-    question: previousSummary.length > 50
-      ? `Based on everything you've shared, what was THE single most energizing moment? And what was the biggest energy drain?`
-      : `What specific moment during "${goalTitle}" made you feel most alive? And what moment drained you most?`,
-    hint: "The more specific, the better First Mate can match you to work that keeps you in flow.",
-  });
-
-  return questions;
+interface Message {
+  role: "user" | "assistant";
+  content: string;
 }
 
+type Phase = "intro" | "chat" | "evaluating" | "success" | "failure";
+
 export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps) {
-  const [step, setStep] = useState<Step>("greeting");
-  const [currentAnswer, setCurrentAnswer] = useState("");
-  const [answers, setAnswers] = useState({
-    activities: "",
-    environments: "",
-    interactions: "",
-    objects: "",
-    users_present: "",
-    excitement_level: "",
-    peak_moments: "",
-  });
-  const [aiMessage, setAiMessage] = useState("");
+  const { isDark } = useTheme();
+  const [phase, setPhase] = useState<Phase>("intro");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  const [aiMessage, setAiMessage] = useState(""); // final success/failure message
   const [showRedFlash, setShowRedFlash] = useState(false);
+  const [useVoice, setUseVoice] = useState(false);
+  const [ttsAmplitude, setTtsAmplitude] = useState(0);
 
-  if (!isOpen) return null;
+  const messagesRef = useRef<Message[]>([]);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsAnimRef = useRef<number>(0);
+  const isProcessingRef = useRef(false);
+  const safariUnlockedRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pendingVoiceSubmitRef = useRef(false);
 
-  const steps = generateQuestions(goal, answers);
-  const stepIndex = steps.findIndex((s) => s.key === step);
-  const currentStep = steps[stepIndex];
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  function handleNext() {
-    if (!currentAnswer.trim()) return;
-
-    // Save the current answer
-    const answerMap: Record<string, string> = {
-      A: "activities",
-      E: "environments",
-      I: "interactions",
-      O: "objects",
-      U: "users_present",
-      excitement: "excitement_level",
-      peak_moments: "peak_moments",
-    };
-
-    if (currentStep) {
-      const field = answerMap[currentStep.key];
-      setAnswers((prev) => ({ ...prev, [field]: currentAnswer.trim() }));
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+  }, [messages, isAiTyping]);
 
-    setCurrentAnswer("");
-
-    // Advance to next step
-    const field = answerMap[currentStep.key];
-    const updatedAnswers = { ...answers, [field]: currentAnswer.trim() };
-    const updatedSteps = generateQuestions(goal, updatedAnswers);
-    if (stepIndex < updatedSteps.length - 1) {
-      setStep(updatedSteps[stepIndex + 1].key);
-    } else {
-      // All questions answered — submit
-      handleSubmit({
-        ...answers,
-        [field]: currentAnswer.trim(),
-      });
+  // Reset on open
+  useEffect(() => {
+    if (isOpen) {
+      setPhase("intro");
+      setMessages([]);
+      setInput("");
+      setIsAiTyping(false);
+      setAiMessage("");
+      setShowRedFlash(false);
+      setUseVoice(false);
+      setTtsAmplitude(0);
+      messagesRef.current = [];
+      isProcessingRef.current = false;
     }
-  }
+  }, [isOpen]);
 
-  async function handleSubmit(finalAnswers: typeof answers) {
-    setStep("evaluating");
+  // ── TTS ──────────────────────────────────────────────────────────────────
+  const stopTts = useCallback(() => {
+    cancelAnimationFrame(ttsAnimRef.current);
+    setTtsAmplitude(0);
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      if (ttsAudioRef.current.parentNode) ttsAudioRef.current.parentNode.removeChild(ttsAudioRef.current);
+      ttsAudioRef.current = null;
+    }
+  }, []);
+
+  const playTts = useCallback(async (text: string, onDone?: () => void) => {
+    stopTts();
+    // Strip the [AEIOU_COMPLETE] signal and JSON from spoken text
+    const speakText = text.split("[AEIOU_COMPLETE]")[0].trim();
+    if (!speakText) { onDone?.(); return; }
 
     try {
+      const res = await fetch("/api/voice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: speakText, voice: "female" }),
+      });
+      if (!res.ok) { onDone?.(); return; }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = document.createElement("audio");
+      audio.style.display = "none";
+      document.body.appendChild(audio);
+      ttsAudioRef.current = audio;
+
+      let t = 0;
+      const pulse = () => {
+        t += 0.05;
+        setTtsAmplitude(0.25 + Math.sin(t * 3.5) * 0.15);
+        ttsAnimRef.current = requestAnimationFrame(pulse);
+      };
+      ttsAnimRef.current = requestAnimationFrame(pulse);
+
+      audio.onended = () => {
+        cancelAnimationFrame(ttsAnimRef.current);
+        setTtsAmplitude(0);
+        URL.revokeObjectURL(url);
+        if (audio.parentNode) audio.parentNode.removeChild(audio);
+        ttsAudioRef.current = null;
+        onDone?.();
+      };
+      audio.onerror = () => {
+        cancelAnimationFrame(ttsAnimRef.current);
+        setTtsAmplitude(0);
+        URL.revokeObjectURL(url);
+        if (audio.parentNode) audio.parentNode.removeChild(audio);
+        ttsAudioRef.current = null;
+        onDone?.();
+      };
+      audio.src = url;
+      await audio.play();
+    } catch {
+      onDone?.();
+    }
+  }, [stopTts]);
+
+  // ── Submit AEIOU data after AI signals complete ──────────────────────────
+  const submitAeiou = useCallback(async (extractedJson: string) => {
+    setPhase("evaluating");
+    stopTts();
+    stopListeningFn();
+
+    try {
+      const fields = JSON.parse(extractedJson);
       const res = await fetch("/api/aeiou", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          goal_id: goal.id,
-          ...finalAnswers,
-        }),
+        body: JSON.stringify({ goal_id: goal.id, ...fields }),
       });
 
       if (res.ok) {
         const data = await res.json();
         setAiMessage(data.aiMessage || "");
-
         if (data.wasSuccessful) {
-          setStep("success");
-          setTimeout(() => {
-            onSuccess(data.aeiouResponse.id);
-          }, 2000);
+          setPhase("success");
+          // Speak success message
+          if (useVoice && data.aiMessage) {
+            playTts(data.aiMessage);
+          }
+          setTimeout(() => onSuccess(data.aeiouResponse.id), 2500);
         } else {
-          setStep("failure");
+          setPhase("failure");
           setShowRedFlash(true);
-          setTimeout(() => {
-            setShowRedFlash(false);
-            onClose();
-          }, 5000);
+          if (useVoice && data.aiMessage) playTts(data.aiMessage);
+          setTimeout(() => { setShowRedFlash(false); onClose(); }, 5000);
         }
       } else {
-        setStep("failure");
+        setPhase("failure");
         setAiMessage("Something went wrong. Please try again.");
         setTimeout(onClose, 3000);
       }
     } catch {
-      setStep("failure");
+      setPhase("failure");
       setAiMessage("Connection error. Please try again.");
       setTimeout(onClose, 3000);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goal.id, onClose, onSuccess, playTts, stopTts, useVoice]);
+
+  // ── Send user message to AI, stream response ────────────────────────────
+  const sendToAi = useCallback(async (userText: string) => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
+    const userMsg: Message = { role: "user", content: userText };
+    const updated = [...messagesRef.current, userMsg];
+    setMessages(updated);
+    messagesRef.current = updated;
+    setIsAiTyping(true);
+
+    let fullResponse = "";
+
+    try {
+      const res = await fetch("/api/aeiou/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: updated, goalTitle: goal.title }),
+      });
+
+      if (!res.ok) throw new Error("AI error");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      // Add placeholder assistant message
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.text) {
+                fullResponse += parsed.text;
+                setMessages((prev) => {
+                  const next = [...prev];
+                  next[next.length - 1] = { role: "assistant", content: fullResponse };
+                  return next;
+                });
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
+
+      // Sync ref with clean text (no AEIOU_COMPLETE signal)
+      const displayText = fullResponse.split("[AEIOU_COMPLETE]")[0].trim();
+      const finalMsgs = [...messagesRef.current.slice(0, -1), { role: "assistant" as const, content: displayText }];
+      // Keep full response in ref so AI has context, show clean in UI
+      messagesRef.current = [...messagesRef.current.slice(0, -1), { role: "assistant" as const, content: fullResponse }];
+      setMessages(finalMsgs);
+
+      setIsAiTyping(false);
+
+      // Check if AI signalled completion
+      if (fullResponse.includes("[AEIOU_COMPLETE]")) {
+        const jsonPart = fullResponse.split("[AEIOU_COMPLETE]")[1]?.trim();
+        if (jsonPart) {
+          if (useVoice) {
+            // Speak the last bit before the signal, then submit
+            playTts(displayText, () => submitAeiou(jsonPart));
+          } else {
+            submitAeiou(jsonPart);
+          }
+          isProcessingRef.current = false;
+          return;
+        }
+      }
+
+      // Speak the response then resume listening
+      if (useVoice && displayText) {
+        playTts(displayText, () => {
+          isProcessingRef.current = false;
+          pendingVoiceSubmitRef.current = false;
+          startListening();
+        });
+      } else {
+        isProcessingRef.current = false;
+      }
+    } catch {
+      setIsAiTyping(false);
+      isProcessingRef.current = false;
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next[next.length - 1]?.role === "assistant") {
+          next[next.length - 1] = { role: "assistant", content: "Sorry, something went wrong. Try again." };
+        }
+        return next;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goal.title, playTts, submitAeiou, useVoice]);
+
+  // ── STT — utterance end auto-sends ──────────────────────────────────────
+  const handleUtteranceEnd = useCallback((text: string) => {
+    if (!text.trim()) return;
+    stopListeningFn();
+    sendToAi(text.trim());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sendToAi]);
+
+  const { startListening, stopListening: stopListeningFn, transcript, isListening, audioAmplitude } = useDeepgramSTT(handleUtteranceEnd);
+
+  // ── Start the conversation ───────────────────────────────────────────────
+  const startConversation = useCallback(async (withVoice: boolean) => {
+    setUseVoice(withVoice);
+    setPhase("chat");
+
+    // Unlock Safari audio on the user gesture
+    if (withVoice && !safariUnlockedRef.current) {
+      try {
+        const ctx = new AudioContext();
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination); src.start(0); ctx.close();
+      } catch { /* non-critical */ }
+      safariUnlockedRef.current = true;
+    }
+
+    // Kick off with opening question
+    isProcessingRef.current = true;
+    setIsAiTyping(true);
+
+    let fullResponse = "";
+
+    try {
+      const openingMessages: Message[] = [{
+        role: "user",
+        content: `I just completed my goal: "${goal.title}". I'm ready to reflect on it.`,
+      }];
+      setMessages(openingMessages);
+      messagesRef.current = openingMessages;
+
+      const res = await fetch("/api/aeiou/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: openingMessages, goalTitle: goal.title }),
+      });
+
+      if (!res.ok) throw new Error("AI error");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.text) {
+                fullResponse += parsed.text;
+                setMessages((prev) => {
+                  const next = [...prev];
+                  next[next.length - 1] = { role: "assistant", content: fullResponse };
+                  return next;
+                });
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
+
+      const displayText = fullResponse.split("[AEIOU_COMPLETE]")[0].trim();
+      messagesRef.current = [...messagesRef.current, { role: "assistant", content: fullResponse }];
+      setMessages((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = { role: "assistant", content: displayText };
+        return next;
+      });
+      setIsAiTyping(false);
+
+      if (withVoice && displayText) {
+        playTts(displayText, () => {
+          isProcessingRef.current = false;
+          startListening();
+        });
+      } else {
+        isProcessingRef.current = false;
+      }
+    } catch {
+      setIsAiTyping(false);
+      isProcessingRef.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goal.title, playTts]);
+
+  // Cleanup on unmount / close
+  useEffect(() => {
+    if (!isOpen) {
+      stopTts();
+      stopListeningFn();
+    }
+  }, [isOpen, stopTts, stopListeningFn]);
+
+  // Text submit
+  function handleTextSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || isAiTyping) return;
+    const text = input.trim();
+    setInput("");
+    sendToAi(text);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleNext();
+      handleTextSubmit(e as unknown as React.FormEvent);
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center aeiou-fade-in">
-      <div className="w-full max-w-2xl mx-auto px-8 flex flex-col items-center">
-        {/* Globe */}
-        <div
-          className={`transition-all duration-500 ${showRedFlash ? "globe-red-flash" : ""}`}
-          style={{ transform: "scale(0.35)", transformOrigin: "center center", marginBottom: "-120px", marginTop: "-120px" }}
-        >
-          <Globe isActive={step === "evaluating"} />
-        </div>
+  // Amplitude for globe: mic when listening, tts when speaking
+  const voiceAmplitude = isListening ? audioAmplitude : ttsAmplitude;
+  const globeActive = isAiTyping || phase === "evaluating";
 
-        {/* Greeting */}
-        {step === "greeting" && (
-          <div className="text-center aeiou-slide-up">
-            <h2 className="text-2xl font-semibold text-white mb-3">
-              Completing: {goal.title}
-            </h2>
-            <p className="text-gray-400 text-sm mb-8">
-              Let&apos;s reflect on completing <strong className="text-white">{goal.title}</strong>.
-              I&apos;ll ask you a few questions tailored to your experience — your honest answers help me understand what kind of work energizes you.
-            </p>
+  if (!isOpen) return null;
+
+  return (
+    <div className={`fixed inset-0 z-50 flex flex-col transition-colors duration-300 ${isDark ? "bg-black" : "bg-white"}`}>
+
+      {/* Globe — fills top half */}
+      <div
+        className={`transition-all duration-500 ${showRedFlash ? "globe-red-flash" : ""}`}
+        style={{ flex: "0 0 45%", position: "relative" }}
+      >
+        <Globe
+          isActive={globeActive}
+          voiceAmplitude={voiceAmplitude > 0 ? 0.05 + voiceAmplitude * 0.6 : 0}
+          voiceMode={phase === "chat" && (isListening || ttsAmplitude > 0)}
+        />
+      </div>
+
+      {/* Content — bottom half */}
+      <div className="flex-1 flex flex-col min-h-0 px-6 pb-6">
+
+        {/* ── INTRO ── */}
+        {phase === "intro" && (
+          <div className="flex flex-col items-center justify-center flex-1 gap-6 text-center">
+            <div>
+              <h2 className={`text-xl font-semibold mb-2 ${isDark ? "text-white" : "text-gray-900"}`}>
+                {goal.title}
+              </h2>
+              <p className={`text-sm max-w-sm ${isDark ? "text-white/50" : "text-gray-500"}`}>
+                Let&apos;s reflect on what you accomplished. I&apos;ll ask a few questions — answer however feels natural.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => startConversation(true)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-colors cursor-pointer ${
+                  isDark ? "bg-white text-gray-900 hover:bg-gray-100" : "bg-gray-900 text-white hover:bg-gray-700"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                </svg>
+                Talk it through
+              </button>
+              <button
+                onClick={() => startConversation(false)}
+                className={`px-5 py-2.5 rounded-xl font-medium text-sm border transition-colors cursor-pointer ${
+                  isDark
+                    ? "border-white/20 text-white/70 hover:bg-white/10"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Type instead
+              </button>
+            </div>
             <button
-              onClick={() => setStep("A")}
-              className="bg-white text-gray-900 px-8 py-3 rounded-xl font-medium hover:bg-gray-100 transition-colors cursor-pointer"
+              onClick={onClose}
+              className={`text-xs transition-colors cursor-pointer ${isDark ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"}`}
             >
-              Let&apos;s go
+              Not now
             </button>
           </div>
         )}
 
-        {/* AEIOU + Engagement Questions */}
-        {currentStep && (
-          <div className="w-full aeiou-slide-up" key={currentStep.key}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl font-bold text-white/20">
-                {currentStep.letter}
-              </span>
-              <div className="flex gap-1">
-                {steps.map((s, i) => (
-                  <div
-                    key={s.key}
-                    className={`w-6 h-1 rounded-full transition-colors ${
-                      i <= stepIndex ? "bg-white" : "bg-white/20"
+        {/* ── CHAT ── */}
+        {phase === "chat" && (
+          <>
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 py-2 space-y-3">
+              {messages.filter(m => m.role === "assistant" && m.content).map((m, i) => (
+                <div key={i} className={`text-sm leading-relaxed ${isDark ? "text-white/90" : "text-gray-800"}`}>
+                  {m.content}
+                </div>
+              ))}
+              {messages.filter(m => m.role === "user").slice(-1).map((m, i) => (
+                <div key={`u${i}`} className={`text-sm italic ${isDark ? "text-white/40" : "text-gray-400"}`}>
+                  {m.content}
+                </div>
+              ))}
+              {isAiTyping && (
+                <div className={`text-sm ${isDark ? "text-white/30" : "text-gray-400"}`}>
+                  <span className="animate-pulse">...</span>
+                </div>
+              )}
+              {/* Live transcript */}
+              {isListening && transcript && (
+                <div className={`text-sm italic ${isDark ? "text-white/30" : "text-gray-400"}`}>
+                  {transcript}
+                </div>
+              )}
+            </div>
+
+            {/* Input area */}
+            {useVoice ? (
+              /* Voice mode — status + stop button */
+              <div className="flex flex-col items-center gap-3 pt-2">
+                <p className={`text-xs tracking-widest uppercase ${
+                  isDark ? "text-white/40" : "text-gray-400"
+                }`}>
+                  {isListening ? "Listening..." : ttsAmplitude > 0 ? "Speaking..." : isAiTyping ? "Thinking..." : ""}
+                </p>
+                <div className="flex gap-3">
+                  {/* Switch to text */}
+                  <button
+                    onClick={() => {
+                      stopTts();
+                      stopListeningFn();
+                      setUseVoice(false);
+                    }}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                      isDark ? "border-white/20 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-600"
                     }`}
-                  />
-                ))}
+                  >
+                    Switch to text
+                  </button>
+                  <button
+                    onClick={() => { stopTts(); stopListeningFn(); onClose(); }}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                      isDark ? "border-white/20 text-white/40 hover:text-white/70" : "border-gray-200 text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    Exit
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <p className="text-white text-lg mb-2">{currentStep.question}</p>
-            {currentStep.hint && (
-              <p className="text-white/30 text-xs mb-5 italic">{currentStep.hint}</p>
+            ) : (
+              /* Text mode */
+              <form onSubmit={handleTextSubmit} className="flex gap-2 pt-2">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Reply..."
+                  rows={2}
+                  disabled={isAiTyping}
+                  autoFocus
+                  className={`flex-1 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none border ${
+                    isDark
+                      ? "bg-white/10 border-white/20 text-white placeholder-white/30 focus:border-white/40"
+                      : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-gray-400"
+                  }`}
+                />
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || isAiTyping}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors cursor-pointer disabled:opacity-30 ${
+                      isDark ? "bg-white text-gray-900 hover:bg-gray-100" : "bg-gray-900 text-white hover:bg-gray-700"
+                    }`}
+                  >
+                    Send
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className={`text-xs transition-colors cursor-pointer ${isDark ? "text-white/30 hover:text-white/60" : "text-gray-400 hover:text-gray-600"}`}
+                  >
+                    Exit
+                  </button>
+                </div>
+              </form>
             )}
-            {!currentStep.hint && <div className="mb-4" />}
+          </>
+        )}
 
-            <textarea
-              value={currentAnswer}
-              onChange={(e) => setCurrentAnswer(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your reflection..."
-              rows={3}
-              autoFocus
-              className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/40 resize-none focus:outline-none focus:border-white/50 text-sm"
-            />
-
-            <div className="flex justify-between mt-4">
-              <button
-                onClick={onClose}
-                className="text-white/40 hover:text-white/70 text-sm cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleNext}
-                disabled={!currentAnswer.trim()}
-                className="bg-white text-gray-900 px-6 py-2 rounded-lg font-medium hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer text-sm"
-              >
-                {stepIndex === steps.length - 1 ? "Submit" : "Next"}
-              </button>
-            </div>
+        {/* ── EVALUATING ── */}
+        {phase === "evaluating" && (
+          <div className="flex-1 flex items-center justify-center">
+            <p className={`text-sm animate-pulse ${isDark ? "text-white/50" : "text-gray-400"}`}>
+              Reflecting on your journey...
+            </p>
           </div>
         )}
 
-        {/* Evaluating */}
-        {step === "evaluating" && (
-          <div className="text-center aeiou-slide-up">
-            <p className="text-white/60 text-sm">Reflecting on your journey...</p>
-          </div>
-        )}
-
-        {/* Success */}
-        {step === "success" && (
-          <div className="text-center aeiou-slide-up">
-            <p className="text-white text-lg font-medium mb-2">
+        {/* ── SUCCESS ── */}
+        {phase === "success" && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+            <p className={`text-lg font-medium ${isDark ? "text-white" : "text-gray-900"}`}>
               {aiMessage}
             </p>
-            <p className="text-white/50 text-sm">
+            <p className={`text-sm ${isDark ? "text-white/40" : "text-gray-400"}`}>
               Preparing your planet reward...
             </p>
           </div>
         )}
 
-        {/* Failure */}
-        {step === "failure" && (
-          <div className="text-center aeiou-slide-up">
-            <p className="text-red-400 text-lg font-medium mb-2">
+        {/* ── FAILURE ── */}
+        {phase === "failure" && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+            <p className="text-red-400 text-lg font-medium">
               {aiMessage || "It seems like this goal isn't quite finished yet."}
             </p>
-            <p className="text-white/50 text-sm">
+            <p className={`text-sm ${isDark ? "text-white/40" : "text-gray-400"}`}>
               Give it another shot — you&apos;re closer than you think!
             </p>
           </div>
