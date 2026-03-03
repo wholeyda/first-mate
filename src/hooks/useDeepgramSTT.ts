@@ -1,17 +1,35 @@
 /**
- * useDeepgramSTT — Real-time speech-to-text via Deepgram WebSocket
+ * useDeepgramSTT — Real-time speech-to-text via server-side proxy
  *
- * Captures mic audio, streams to Deepgram for real-time transcription,
- * and exposes audioAmplitude (0-1) from the mic's AnalyserNode
- * for driving planet animations.
+ * Records mic audio in short chunks and POSTs them to /api/voice/transcribe,
+ * which forwards to Deepgram's REST API with a server-side Authorization header.
  *
- * Uses `utterance_end_ms` so Deepgram fires an event when the user
- * stops speaking for a natural pause — this triggers auto-send.
+ * Why not WebSocket directly to Deepgram?
+ * - Browser WebSocket cannot set Authorization headers
+ * - Safari rejects subprotocol auth ["token", key]
+ * - Deepgram does NOT support ?token= URL query param
+ *
+ * Architecture:
+ * 1. AudioContext AnalyserNode monitors mic amplitude for planet animation
+ * 2. MediaRecorder collects audio chunks every CHUNK_MS milliseconds
+ * 3. When enough audio accumulates, it's POSTed to /api/voice/transcribe
+ * 4. Silence detection: when amplitude stays below threshold for SILENCE_MS,
+ *    the accumulated transcript is fired via onUtteranceEnd callback
+ * 5. Audio is also exposed as audioAmplitude (0-1) for planet animations
  */
 
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+
+// How often MediaRecorder fires ondataavailable
+const CHUNK_MS = 2000;
+
+// RMS amplitude below this = silence
+const SILENCE_THRESHOLD = 0.015;
+
+// How long silence must persist before auto-send fires (ms)
+const SILENCE_MS = 1200;
 
 interface DeepgramSTTResult {
   /** Start capturing mic and streaming to Deepgram */
@@ -40,28 +58,81 @@ export function useDeepgramSTT(
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number>(0);
-  const websocketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const finalTranscriptRef = useRef("");
   const onUtteranceEndRef = useRef(onUtteranceEnd);
+  const isListeningRef = useRef(false);
+
+  // Silence detection
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const utteranceFiredRef = useRef(false);
+  const processingChunkRef = useRef(false);
+  const mimeTypeRef = useRef("");
 
   // Keep callback ref in sync
   useEffect(() => {
     onUtteranceEndRef.current = onUtteranceEnd;
   }, [onUtteranceEnd]);
 
-  // Amplitude monitoring loop
+  // Amplitude monitoring loop (also drives silence detection)
   const updateAmplitude = useCallback(() => {
     if (!analyserRef.current) return;
+
     const data = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(data);
-    const sum = data.reduce((a, b) => a + b, 0);
-    const avg = sum / data.length / 255; // normalize to 0-1
-    setAudioAmplitude(avg);
+    analyserRef.current.getByteTimeDomainData(data);
+
+    // Compute RMS amplitude
+    let sumSq = 0;
+    for (let i = 0; i < data.length; i++) {
+      const s = (data[i] - 128) / 128;
+      sumSq += s * s;
+    }
+    const rms = Math.sqrt(sumSq / data.length);
+    setAudioAmplitude(Math.min(rms * 4, 1)); // scale up for visibility
+
+    // Silence detection — reset timer when user speaks
+    if (rms > SILENCE_THRESHOLD) {
+      // User is speaking — clear any pending silence timer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      utteranceFiredRef.current = false;
+    } else if (
+      isListeningRef.current &&
+      finalTranscriptRef.current.trim() &&
+      !utteranceFiredRef.current &&
+      !silenceTimerRef.current
+    ) {
+      // Silence detected after speech — start countdown
+      silenceTimerRef.current = setTimeout(() => {
+        silenceTimerRef.current = null;
+        if (
+          isListeningRef.current &&
+          finalTranscriptRef.current.trim() &&
+          !utteranceFiredRef.current
+        ) {
+          utteranceFiredRef.current = true;
+          const text = finalTranscriptRef.current.trim();
+          finalTranscriptRef.current = "";
+          setTranscript("");
+          onUtteranceEndRef.current?.(text);
+        }
+      }, SILENCE_MS);
+    }
+
     animFrameRef.current = requestAnimationFrame(updateAmplitude);
   }, []);
 
   const cleanup = useCallback(() => {
+    isListeningRef.current = false;
+
+    // Clear silence timer
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
     // Stop animation frame
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
@@ -73,14 +144,6 @@ export function useDeepgramSTT(
       mediaRecorderRef.current.stop();
     }
     mediaRecorderRef.current = null;
-
-    // Close WebSocket
-    if (websocketRef.current) {
-      if (websocketRef.current.readyState === WebSocket.OPEN) {
-        websocketRef.current.close();
-      }
-      websocketRef.current = null;
-    }
 
     // Close audio context
     if (audioContextRef.current && audioContextRef.current.state !== "closed") {
@@ -103,124 +166,98 @@ export function useDeepgramSTT(
     return cleanup;
   }, [cleanup]);
 
+  // Send an audio chunk to our server proxy
+  const transcribeChunk = useCallback(async (blob: Blob) => {
+    if (blob.size < 1000 || processingChunkRef.current) return;
+    processingChunkRef.current = true;
+
+    try {
+      const res = await fetch("/api/voice/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": mimeTypeRef.current || blob.type || "audio/webm" },
+        body: blob,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error("[STT] Transcription error:", res.status, errData);
+        processingChunkRef.current = false;
+        return;
+      }
+
+      const data = await res.json();
+      const newText = data.transcript?.trim() ?? "";
+
+      if (newText) {
+        finalTranscriptRef.current =
+          finalTranscriptRef.current
+            ? `${finalTranscriptRef.current} ${newText}`
+            : newText;
+        setTranscript(finalTranscriptRef.current);
+      }
+    } catch (err) {
+      console.error("[STT] Chunk fetch error:", err);
+    } finally {
+      processingChunkRef.current = false;
+    }
+  }, []);
+
   const startListening = useCallback(async () => {
     setError(null);
     setTranscript("");
     finalTranscriptRef.current = "";
+    utteranceFiredRef.current = false;
 
     try {
       // 1. Get mic access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
-      // 2. Set up AudioContext + AnalyserNode for amplitude
+      // 2. Set up AudioContext + AnalyserNode for amplitude & silence detection
       const audioCtx = new AudioContext();
       audioContextRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.8;
       source.connect(analyser);
       analyserRef.current = analyser;
+
+      isListeningRef.current = true;
 
       // Start amplitude monitoring
       animFrameRef.current = requestAnimationFrame(updateAmplitude);
 
-      // 3. Fetch a short-lived Deepgram token from our server
-      // (keeps master API key off the client)
-      let dgToken: string;
-      try {
-        const tokenRes = await fetch("/api/voice/token");
-        const tokenData = await tokenRes.json();
-        console.log("[Deepgram] Token fetch status:", tokenRes.status, "token length:", tokenData.token?.length, "error:", tokenData.error);
-        if (!tokenRes.ok) throw new Error(`Token fetch failed: ${tokenData.error}`);
-        dgToken = tokenData.token;
-        if (!dgToken) throw new Error("No token in response");
-      } catch (err) {
-        console.error("[Deepgram] Token error:", err);
-        setError("Could not connect to voice service");
-        cleanup();
-        return;
-      }
+      // 3. Pick supported MediaRecorder format
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "";
+      mimeTypeRef.current = mimeType;
 
-      // 4. Open Deepgram WebSocket — token in URL query param (Safari rejects subprotocol auth)
-      const ws = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&interim_results=true&endpointing=200&utterance_end_ms=900&token=${dgToken}`
+      // 4. Start MediaRecorder — fires chunks to our proxy
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined
       );
-      websocketRef.current = ws;
+      mediaRecorderRef.current = recorder;
 
-      ws.onopen = () => {
-        console.log("[Deepgram] WebSocket opened successfully");
-        // 5. Start MediaRecorder to send audio chunks
-        // Safari doesn't support webm — pick a supported format
-        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : MediaRecorder.isTypeSupported("audio/mp4")
-          ? "audio/mp4"
-          : "";
-        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-        mediaRecorderRef.current = recorder;
-
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-            ws.send(event.data);
-          }
-        };
-
-        recorder.start(250); // Send chunks every 250ms
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          // Handle UtteranceEnd event — user stopped speaking
-          if (data.type === "UtteranceEnd") {
-            const text = finalTranscriptRef.current.trim();
-            if (text && onUtteranceEndRef.current) {
-              onUtteranceEndRef.current(text);
-              // Reset transcript for next utterance
-              finalTranscriptRef.current = "";
-              setTranscript("");
-            }
-            return;
-          }
-
-          if (data.channel?.alternatives?.[0]) {
-            const alt = data.channel.alternatives[0];
-            if (data.is_final) {
-              finalTranscriptRef.current += (finalTranscriptRef.current ? " " : "") + alt.transcript;
-              setTranscript(finalTranscriptRef.current);
-            } else {
-              // Show interim results appended to final
-              const interim = alt.transcript;
-              setTranscript(
-                finalTranscriptRef.current + (finalTranscriptRef.current && interim ? " " : "") + interim
-              );
-            }
-          }
-        } catch {
-          // Skip malformed messages
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && isListeningRef.current) {
+          transcribeChunk(event.data);
         }
       };
 
-      ws.onerror = (e) => {
-        console.error("[Deepgram] WebSocket error:", e);
-        setError("Deepgram connection error");
-        cleanup();
-        setIsListening(false);
-      };
-
-      ws.onclose = (e) => {
-        console.warn("[Deepgram] WebSocket closed — code:", e.code, "reason:", e.reason, "wasClean:", e.wasClean);
-      };
-
+      recorder.start(CHUNK_MS);
       setIsListening(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to start mic";
+      console.error("[STT] startListening error:", err);
       setError(msg);
       cleanup();
     }
-  }, [cleanup, updateAmplitude]);
+  }, [cleanup, updateAmplitude, transcribeChunk]);
 
   const stopListening = useCallback(() => {
     cleanup();
