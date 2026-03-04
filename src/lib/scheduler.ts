@@ -187,6 +187,12 @@ export function findNextSlot(
   const calendarType: "work" | "personal" = goal.is_work ? "work" : "personal";
   const durationMinutes = goal.duration_minutes ?? Math.min(goal.estimated_hours * 60, 120);
 
+  // Use a 5-minute buffer on "now" so slots that are right at the current
+  // time (e.g. user says "8:20pm" and it's 8:19pm UTC-as-PST) aren't
+  // rejected as past. Vercel runs in UTC so new Date() is correct UTC ms —
+  // subtracting 5 min gives us a slightly more permissive floor.
+  const nowWithBuffer = new Date(Date.now() - 5 * 60 * 1000);
+
   // If the goal has a specific due_date AND a preferred_time, the user almost
   // certainly said "schedule for [day] at [time]". Start scanning from the
   // due_date itself so we land on exactly that day, not the first available
@@ -214,7 +220,7 @@ export function findNextSlot(
         if (tryHour >= 21) break;
 
         const blockStart = setTimeInPST(dueDate, tryHour, tryMinute);
-        if (blockStart > new Date()) {
+        if (blockStart > nowWithBuffer) {
           const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
           if (!hasConflict(blockStart, blockEnd, busySlots)) {
             return {
@@ -244,7 +250,7 @@ export function findNextSlot(
 
           const blockStart = setTimeInPST(currentDate, tryHour, tryMinute);
 
-          if (blockStart > new Date()) {
+          if (blockStart > nowWithBuffer) {
             const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
 
             if (!hasConflict(blockStart, blockEnd, busySlots)) {
@@ -270,9 +276,8 @@ export function findNextSlot(
     const dayStart = setTimeInPST(currentDate, 8, 0);
     const dayEnd = setTimeInPST(currentDate, 21, 0);
 
-    // Skip past times for today
-    const now = new Date();
-    const effectiveStart = dayStart < now ? new Date(Math.ceil(now.getTime() / (15 * 60 * 1000)) * (15 * 60 * 1000)) : dayStart;
+    // Skip past times for today — use nowWithBuffer so slots right at "now" aren't excluded
+    const effectiveStart = dayStart < nowWithBuffer ? new Date(Math.ceil(nowWithBuffer.getTime() / (15 * 60 * 1000)) * (15 * 60 * 1000)) : dayStart;
 
     if (effectiveStart < dayEnd) {
       const availableSlots = findAvailableSlots(effectiveStart, dayEnd, busySlots);
@@ -324,7 +329,8 @@ export function findRecurringSlots(
   ).filter((d) => d !== undefined);
 
   const currentDate = new Date(startDate);
-  const now = new Date();
+  // Use a 5-minute buffer so slots right at "now" aren't skipped
+  const nowWithBuffer = new Date(Date.now() - 5 * 60 * 1000);
 
   while (currentDate < endDate) {
     const dayOfWeek = getDayOfWeekInPST(currentDate);
@@ -333,8 +339,8 @@ export function findRecurringSlots(
       // Set the preferred time in PST
       const blockStart = setTimeInPST(currentDate, prefHour, prefMinute);
 
-      // Skip if in the past
-      if (blockStart > now) {
+      // Skip if in the past (with 5-min buffer)
+      if (blockStart > nowWithBuffer) {
         const blockEnd = new Date(blockStart.getTime() + durationMinutes * 60 * 1000);
 
         // Include already-scheduled recurring blocks as busy
