@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: {
           Authorization: `Token ${apiKey}`,
+          // Deepgram requires exact mime — audio/webm or audio/mp4
           "Content-Type": contentType,
         },
         body: audioBuffer,

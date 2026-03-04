@@ -224,11 +224,17 @@ export function useDeepgramSTT(
       isListeningRef.current = true;
       animFrameRef.current = requestAnimationFrame(updateAmplitude);
 
-      // Pick best format — prefer webm for Chrome, mp4 for Safari
+      // Pick best format — prefer webm+opus (Chrome/Firefox), then webm, then ogg+opus.
+      // Deliberately avoid audio/mp4: Safari produces a fragmented mp4 container
+      // which Deepgram's pre-recorded REST API rejects with a 400 Bad Request.
+      // Leaving mimeType empty on Safari lets the browser choose its default,
+      // which on modern Safari is audio/mp4 — but we override below if unsupported.
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-        ? "audio/mp4"
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+        ? "audio/ogg;codecs=opus"
         : "";
       mimeTypeRef.current = mimeType;
 
