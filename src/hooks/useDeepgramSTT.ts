@@ -3,8 +3,12 @@
  *
  * Records the full utterance, then sends it as one complete audio file
  * when silence is detected. This works reliably across all browsers:
- * - Chrome/Firefox: audio/webm (supports streaming chunks)
- * - Safari: audio/mp4 (requires complete file — no partial chunks)
+ * - Chrome/Firefox: audio/webm;codecs=opus (preferred)
+ * - Safari: audio/mp4 (only format Safari's MediaRecorder supports)
+ *
+ * The server proxy (/api/voice/transcribe) handles the Safari mp4 case
+ * by passing mimetype=audio%2Fmp4 as a Deepgram URL query param, which
+ * is required for mp4/aac containers to be accepted by the REST API.
  *
  * Why not WebSocket directly to Deepgram?
  * - Browser WebSocket cannot set Authorization headers
@@ -224,18 +228,23 @@ export function useDeepgramSTT(
       isListeningRef.current = true;
       animFrameRef.current = requestAnimationFrame(updateAmplitude);
 
-      // Pick best format — prefer webm+opus (Chrome/Firefox), then webm, then ogg+opus.
-      // Deliberately avoid audio/mp4: Safari produces a fragmented mp4 container
-      // which Deepgram's pre-recorded REST API rejects with a 400 Bad Request.
-      // Leaving mimeType empty on Safari lets the browser choose its default,
-      // which on modern Safari is audio/mp4 — but we override below if unsupported.
+      // Pick best recording format in priority order:
+      // 1. audio/webm;codecs=opus — Chrome/Firefox, best quality + Deepgram native support
+      // 2. audio/webm — Chrome/Firefox fallback
+      // 3. audio/ogg;codecs=opus — Firefox fallback
+      // 4. audio/mp4 — Safari only. Deepgram accepts this when the server proxy
+      //    passes mimetype=audio%2Fmp4 as a URL query param (handled in /api/voice/transcribe).
+      // Never leave mimeType as "" — that makes the recorder's actual format
+      // unpredictable and the server can't set the right Content-Type for Deepgram.
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/webm")
         ? "audio/webm"
         : MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
         ? "audio/ogg;codecs=opus"
-        : "";
+        : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "audio/mp4"; // Safari final fallback — proxy handles it
       mimeTypeRef.current = mimeType;
 
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);

@@ -9,6 +9,12 @@
  * - Browser WebSocket cannot set Authorization headers
  * - Safari rejects WebSocket subprotocol auth ["token", key]
  * - Deepgram does not support ?token= URL query param
+ *
+ * Safari note:
+ * Safari's MediaRecorder only supports audio/mp4 (AAC-in-MP4 container).
+ * Deepgram accepts mp4 BUT requires the mimetype passed as a URL query
+ * param (not just Content-Type header) to handle it correctly. We detect
+ * the incoming content type and build the Deepgram URL accordingly.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -52,23 +58,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Audio too large" }, { status: 413 });
   }
 
-  // Use base content-type only (strip codec params like ;codecs=opus)
+  // Strip codec params — just the base mime type (e.g. "audio/mp4" not "audio/mp4;codecs=avc1")
   const rawContentType = req.headers.get("content-type") || "audio/webm";
   const contentType = rawContentType.split(";")[0].trim();
 
+  // Build Deepgram URL — for audio/mp4 (Safari), pass mimetype as query param.
+  // Deepgram's REST API requires this for mp4/aac containers; Content-Type alone
+  // is not sufficient and results in a 400 Bad Request.
+  const isMp4 = contentType === "audio/mp4" || contentType === "audio/x-m4a";
+  const dgUrl = isMp4
+    ? `https://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&mimetype=audio%2Fmp4`
+    : `https://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true`;
+
+  console.log("[Deepgram proxy] contentType:", contentType, "isMp4:", isMp4, "size:", audioBuffer.byteLength);
+
   try {
-    const dgRes = await fetch(
-      "https://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true",
-      {
+    const dgRes = await fetch(dgUrl, {
         method: "POST",
         headers: {
           Authorization: `Token ${apiKey}`,
-          // Deepgram requires exact mime — audio/webm or audio/mp4
           "Content-Type": contentType,
         },
         body: audioBuffer,
-      }
-    );
+      });
 
     if (!dgRes.ok) {
       const errText = await dgRes.text().catch(() => "");
