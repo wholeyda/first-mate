@@ -87,10 +87,10 @@ function validateGoal(goal: GoalBody): string | null {
       return "preferred_time has invalid hours or minutes";
     }
   }
-  // Validate duration_minutes if provided
+  // Validate duration_minutes if provided — minimum is 5 minutes (no reason to reject short tasks)
   if (goal.duration_minutes !== null && goal.duration_minutes !== undefined) {
-    if (typeof goal.duration_minutes !== "number" || !isFinite(goal.duration_minutes) || goal.duration_minutes < 15) {
-      return "duration_minutes must be a finite number of at least 15";
+    if (typeof goal.duration_minutes !== "number" || !isFinite(goal.duration_minutes) || goal.duration_minutes < 5) {
+      return "duration_minutes must be a finite positive number";
     }
   }
   // Validate recurring if provided

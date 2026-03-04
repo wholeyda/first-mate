@@ -130,7 +130,7 @@ Every goal proposal must include this block:
 JSON field rules:
 - "priority" is 1–5 (1=low, 5=critical)
 - "preferred_time" — 24-hour "HH:MM". Use your default (08:00 work / 18:00 personal) if user didn't specify.
-- "duration_minutes" — length of each session in minutes. Derive from what the user said; use smart defaults if not stated.
+- "duration_minutes" — length of each session in minutes. Derive from what the user said; use smart defaults if not stated. Minimum value is 10.
 - "estimated_hours" — total hours. For single tasks: same as duration_minutes/60. For recurring: sessions × duration.
 - "hours_per_day" — null unless the user explicitly said how many hours per day on a multi-day project.
 - "recurring" — if repeating, include \`{ "type": "weekly", "days": ["monday", ...] }\`. Otherwise null.
