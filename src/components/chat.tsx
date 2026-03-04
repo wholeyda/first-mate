@@ -181,25 +181,47 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
         }
       }
 
+      // Strip goal JSON from display first — then append status messages on top of clean content.
+      // Order matters: strip first so status messages aren't wiped out when we set the message.
+      const cleanContent = stripGoalJson(assistantContent);
+
+      // Update message to clean version (removes goal_json block from display)
+      if (cleanContent !== assistantContent) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: "assistant",
+            content: cleanContent,
+          };
+          return updated;
+        });
+      }
+
       // Detect quick replies
-      const cleanedForDetection = stripGoalJson(assistantContent);
-      const detectedReplies = detectQuickReplies(cleanedForDetection);
+      const detectedReplies = detectQuickReplies(cleanContent);
       setQuickReplies(detectedReplies);
 
-      // Check for goal JSON
+      // Check for goal JSON and save
+      console.log("[GoalPipeline] assistantContent length:", assistantContent.length);
+      console.log("[GoalPipeline] assistantContent tail:", assistantContent.slice(-300));
       const goals = parseGoalsFromResponse(assistantContent);
+      console.log("[GoalPipeline] parsed goals:", goals.length, goals);
+      console.log("[GoalPipeline] onGoalCreated defined:", !!onGoalCreated);
       if (goals.length > 0 && onGoalCreated) {
         setIsScheduling(true);
         for (const goal of goals) {
           try {
+            console.log("[GoalPipeline] POSTing goal:", goal.title);
             const saveResponse = await fetch("/api/goals", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ goal }),
             });
+            console.log("[GoalPipeline] POST /api/goals status:", saveResponse.status);
 
             if (saveResponse.status === 409) {
               const dupData = await saveResponse.json();
+              console.log("[GoalPipeline] duplicate goal:", dupData);
               setMessages((prev) => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
@@ -211,45 +233,54 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               });
             } else if (saveResponse.ok) {
               const savedData = await saveResponse.json();
+              console.log("[GoalPipeline] savedData:", JSON.stringify(savedData).slice(0, 500));
               onGoalCreated(goal, savedData.goal, savedData.proposedBlocks);
+
+              // Notify the Calendar tab to refresh
+              window.dispatchEvent(new CustomEvent("goal-created"));
+
+              // Always confirm the goal was saved — user should always know it worked.
+              // Then append a second line confirming the calendar event (or explaining why not).
+              let confirmMsg = `✓ Goal saved — "${goal.title}" is now in your sidebar.`;
 
               if (savedData.proposedBlocks?.length > 0) {
                 const block = savedData.proposedBlocks[0];
                 const startDate = new Date(block.start_time);
                 const timeStr = startDate.toLocaleString("en-US", {
-                  weekday: "short",
+                  weekday: "long",
                   month: "short",
                   day: "numeric",
                   hour: "numeric",
                   minute: "2-digit",
                   timeZone: "America/Los_Angeles",
                 });
+                const calType = block.calendar_type === "work" ? "work" : "personal";
                 const count = savedData.proposedBlocks.length;
-                const suffix = count > 1 ? ` (and ${count - 1} more)` : "";
-                const hasGoogleEvent = block.google_event_id;
-                const statusMsg = hasGoogleEvent
-                  ? `Added to your ${block.calendar_type} calendar: ${timeStr} PST${suffix}`
-                  : `Proposed for your ${block.calendar_type} calendar: ${timeStr} PST${suffix} — check Calendar tab to approve`;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: "assistant",
-                    content: updated[updated.length - 1].content + `\n\n${statusMsg}`,
-                  };
-                  return updated;
-                });
+                const extra = count > 1 ? ` (${count - 1} more block${count > 2 ? "s" : ""} also scheduled.)` : "";
+
+                if (block.google_event_id) {
+                  // Event was created directly in Google Calendar
+                  confirmMsg += `\n✓ Google Calendar event created on your ${calType} calendar for ${timeStr} PST.${extra}`;
+                } else {
+                  // Block is pending approval in the Calendar tab
+                  confirmMsg += `\n⏳ Proposed time block: ${timeStr} PST on your ${calType} calendar — head to the Calendar tab to approve it.${extra}`;
+                }
               } else if (savedData.schedulingError) {
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: "assistant",
-                    content: updated[updated.length - 1].content + `\n\n(${savedData.schedulingError})`,
-                  };
-                  return updated;
-                });
+                // Goal saved but scheduling failed — tell the user why
+                confirmMsg += `\n⚠️ Scheduling note: ${savedData.schedulingError}`;
               }
+
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: updated[updated.length - 1].content + `\n\n${confirmMsg}`,
+                };
+                return updated;
+              });
             } else {
               const errData = await saveResponse.json().catch(() => ({ error: "Unknown error" }));
+              console.log("[GoalPipeline] SAVE FAILED status:", saveResponse.status, "error:", errData);
               setMessages((prev) => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
@@ -273,19 +304,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
           }
         }
         setIsScheduling(false);
-      }
-
-      // Clean displayed message
-      const cleanContent = stripGoalJson(assistantContent);
-      if (cleanContent !== assistantContent) {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content: cleanContent,
-          };
-          return updated;
-        });
       }
 
       // Keep messagesRef in sync with the completed assistant reply.

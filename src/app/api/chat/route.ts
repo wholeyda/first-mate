@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     // Call Claude API with streaming
     const stream = anthropic.messages.stream({
       model: "claude-haiku-4-5",
-      max_tokens: 800,
+      max_tokens: 2000,
       system: getSystemPrompt(aeiouHistory.length > 0 ? aeiouHistory : undefined),
       messages: messages.map((msg: { role: string; content: string }) => ({
         role: msg.role,

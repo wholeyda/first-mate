@@ -52,8 +52,11 @@ function validateGoal(goal: GoalBody): string | null {
   if (isNaN(new Date(goal.due_date).getTime())) {
     return "due_date must be a valid date (YYYY-MM-DD)";
   }
-  // Validate due_date is not in the past (compare as date strings to avoid timezone issues)
-  const todayStr = new Date().toISOString().split("T")[0];
+  // Validate due_date is not in the past — use PST date so users in Pacific time
+  // can schedule goals for "today" even after midnight UTC.
+  const todayStr = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Los_Angeles",
+  }); // YYYY-MM-DD in PST
   if (goal.due_date < todayStr) {
     return "due_date cannot be in the past";
   }

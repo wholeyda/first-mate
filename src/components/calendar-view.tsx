@@ -85,25 +85,49 @@ function formatDayShort(dateStr: string): string {
   });
 }
 
-/** Get hours in PST from a date string */
-function getHoursInPST(dateStr: string): number {
-  const date = new Date(dateStr);
-  const pstStr = date.toLocaleString("en-US", { timeZone: PST_TZ, hour12: false });
-  const parts = pstStr.split(", ")[1]?.split(":") || pstStr.split(" ")[1]?.split(":") || [];
-  const h = parseInt(parts[0] || "0", 10);
-  const m = parseInt(parts[1] || "0", 10);
-  return h + m / 60;
+/**
+ * Extract date/time parts in PST using Intl.DateTimeFormat.
+ * Returns { year, month (1-12), day, hour (0-23), minute }.
+ * This avoids the buggy `new Date(toLocaleString(...))` pattern which
+ * creates a timezone-naive Date and breaks on DST boundaries.
+ */
+function getPSTparts(date: Date): { year: number; month: number; day: number; hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: PST_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour") % 24, // Intl can return 24 for midnight; normalise to 0
+    minute: get("minute"),
+  };
 }
 
-/** Get the day of week (0=Mon, 6=Sun) in PST */
+/** Get hours (fractional) in PST from a date string */
+function getHoursInPST(dateStr: string): number {
+  const { hour, minute } = getPSTparts(new Date(dateStr));
+  return hour + minute / 60;
+}
+
+/** Get the day column index (0=Mon … 6=Sun) in PST relative to weekStart */
 function getDayIndexPST(dateStr: string, weekStart: Date): number {
-  const date = new Date(dateStr);
-  const pstDate = new Date(date.toLocaleString("en-US", { timeZone: PST_TZ }));
-  const weekStartPST = new Date(weekStart.toLocaleString("en-US", { timeZone: PST_TZ }));
-  weekStartPST.setHours(0, 0, 0, 0);
-  pstDate.setHours(0, 0, 0, 0);
-  const diff = Math.floor((pstDate.getTime() - weekStartPST.getTime()) / (1000 * 60 * 60 * 24));
-  return diff;
+  const { year: ey, month: em, day: ed } = getPSTparts(new Date(dateStr));
+  const { year: wy, month: wm, day: wd } = getPSTparts(weekStart);
+
+  // Build UTC noon timestamps for both PST calendar dates to diff without DST skew
+  const eventMidnight = Date.UTC(ey, em - 1, ed);
+  const weekMidnight = Date.UTC(wy, wm - 1, wd);
+
+  return Math.floor((eventMidnight - weekMidnight) / (1000 * 60 * 60 * 24));
 }
 
 /** Deduplicate events that appear in both work and personal calendars */
@@ -225,6 +249,13 @@ export function CalendarView() {
 
   useEffect(() => {
     fetchAll();
+  }, [fetchAll]);
+
+  // Auto-refresh when a goal is created from the Chat tab
+  useEffect(() => {
+    const handler = () => fetchAll();
+    window.addEventListener("goal-created", handler);
+    return () => window.removeEventListener("goal-created", handler);
   }, [fetchAll]);
 
   // Auto-scroll to current time on first load
@@ -369,7 +400,14 @@ export function CalendarView() {
   }
 
   const today = new Date();
-  const isCurrentWeek = today >= weekStart && today < weekEnd;
+  // Compare weeks using PST calendar date to avoid UTC midnight boundary issues
+  const { year: todayY, month: todayM, day: todayD } = getPSTparts(today);
+  const { year: wsY, month: wsM, day: wsD } = getPSTparts(weekStart);
+  const { year: weY, month: weM, day: weD } = getPSTparts(weekEnd);
+  const todayUTC = Date.UTC(todayY, todayM - 1, todayD);
+  const weekStartUTC = Date.UTC(wsY, wsM - 1, wsD);
+  const weekEndUTC = Date.UTC(weY, weM - 1, weD);
+  const isCurrentWeek = todayUTC >= weekStartUTC && todayUTC < weekEndUTC;
   const pendingCount = pendingBlocks.length;
 
   // Group pending blocks by day for the list view
@@ -594,7 +632,8 @@ export function CalendarView() {
             {DAYS.map((day, dayIndex) => {
               const dayDate = new Date(weekStart);
               dayDate.setDate(dayDate.getDate() + dayIndex);
-              const isToday = dayDate.toDateString() === today.toDateString();
+              const { year: dy, month: dm, day: dd } = getPSTparts(dayDate);
+              const isToday = Date.UTC(dy, dm - 1, dd) === todayUTC;
               return (
                 <div
                   key={day}
@@ -631,7 +670,8 @@ export function CalendarView() {
               {DAYS.map((day, dayIndex) => {
                 const dayDate = new Date(weekStart);
                 dayDate.setDate(dayDate.getDate() + dayIndex);
-                const isToday = dayDate.toDateString() === today.toDateString();
+                const { year: cy, month: cm, day: cd } = getPSTparts(dayDate);
+                const isToday = Date.UTC(cy, cm - 1, cd) === todayUTC;
 
                 // Filter events for this day (using PST timezone) — only real events, no pending
                 const dayEvents = events.filter((event) => {
