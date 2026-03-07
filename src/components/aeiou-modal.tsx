@@ -51,6 +51,10 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pendingVoiceSubmitRef = useRef(false);
+  // Refs to STT functions so closures defined before useDeepgramSTT always have
+  // the latest versions (avoids stale closure bugs in submitAeiou / sendToAi)
+  const stopListeningRef = useRef<(() => string) | null>(null);
+  const startListeningRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
@@ -144,7 +148,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
   const submitAeiou = useCallback(async (extractedJson: string) => {
     setPhase("evaluating");
     stopTts();
-    stopListeningFn();
+    stopListeningRef.current?.();
 
     try {
       const fields = JSON.parse(extractedJson);
@@ -180,6 +184,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
       setAiMessage("Connection error. Please try again.");
       setTimeout(onClose, 3000);
     }
+  // stopListeningRef is a ref, not a dep — intentionally omitted
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goal.id, onClose, onSuccess, playTts, stopTts, useVoice]);
 
@@ -247,15 +252,24 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
       if (fullResponse.includes("[AEIOU_COMPLETE]")) {
         const jsonPart = fullResponse.split("[AEIOU_COMPLETE]")[1]?.trim();
         if (jsonPart) {
+          isProcessingRef.current = false;
           if (useVoice) {
             // Speak the last bit before the signal, then submit
             playTts(displayText, () => submitAeiou(jsonPart));
           } else {
             submitAeiou(jsonPart);
           }
-          isProcessingRef.current = false;
           return;
         }
+        // [AEIOU_COMPLETE] with no JSON — treat as normal response, keep listening
+        isProcessingRef.current = false;
+        if (useVoice && displayText) {
+          playTts(displayText, () => {
+            pendingVoiceSubmitRef.current = false;
+            startListeningRef.current?.();
+          });
+        }
+        return;
       }
 
       // Speak the response then resume listening
@@ -263,7 +277,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
         playTts(displayText, () => {
           isProcessingRef.current = false;
           pendingVoiceSubmitRef.current = false;
-          startListening();
+          startListeningRef.current?.();
         });
       } else {
         isProcessingRef.current = false;
@@ -285,12 +299,16 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
   // ── STT — utterance end auto-sends ──────────────────────────────────────
   const handleUtteranceEnd = useCallback((text: string) => {
     if (!text.trim()) return;
-    stopListeningFn();
+    stopListeningRef.current?.();
     sendToAi(text.trim());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sendToAi]);
 
   const { startListening, stopListening: stopListeningFn, transcript, isListening, audioAmplitude } = useDeepgramSTT(handleUtteranceEnd);
+
+  // Keep refs in sync with latest STT functions so closures above always call
+  // the current version (prevents stale closure bugs across re-renders)
+  useEffect(() => { startListeningRef.current = startListening; }, [startListening]);
+  useEffect(() => { stopListeningRef.current = stopListeningFn; }, [stopListeningFn]);
 
   // ── Start the conversation ───────────────────────────────────────────────
   const startConversation = useCallback(async (withVoice: boolean) => {
@@ -369,7 +387,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
       if (withVoice && displayText) {
         playTts(displayText, () => {
           isProcessingRef.current = false;
-          startListening();
+          startListeningRef.current?.();
         });
       } else {
         isProcessingRef.current = false;

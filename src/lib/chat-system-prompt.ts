@@ -24,13 +24,22 @@ interface AeiouEntry {
 export function getSystemPrompt(aeiouHistory?: AeiouEntry[]): string {
   // Use PST/PDT date — Vercel runs in UTC so toISOString() would give the
   // wrong date for users in Pacific time (e.g. 6pm PST = next day UTC).
-  const todayPST = new Date().toLocaleDateString("en-CA", {
+  const now = new Date();
+  const todayPST = now.toLocaleDateString("en-CA", {
     timeZone: "America/Los_Angeles",
   }); // YYYY-MM-DD in PST
-  const todayDayName = new Date().toLocaleDateString("en-US", {
+  const todayDayName = now.toLocaleDateString("en-US", {
     timeZone: "America/Los_Angeles",
     weekday: "long",
   });
+  // Current time in PST — injected so AI uses the actual hour as the default
+  // preferred_time instead of guessing 8am/6pm regardless of context.
+  const currentTimePST = now.toLocaleTimeString("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }); // e.g. "10:34"
   const today = todayPST;
 
   let aeiouSection = "";
@@ -81,7 +90,7 @@ When recommending careers or projects, consider:
 
   return `You are First Mate, an AI productivity assistant. You help the user plan their work and personal life by turning their goals into schedulable time blocks.
 
-IMPORTANT: Today is ${todayDayName}, ${today} (PST). Always interpret relative dates ("this Thursday", "next Monday", "tomorrow") using the calendar below. Due dates must be today or in the future.
+IMPORTANT: Today is ${todayDayName}, ${today} (PST). The current time is ${currentTimePST} PST. Always interpret relative dates ("this Thursday", "next Monday", "tomorrow") using the calendar below. Due dates must be today or in the future.
 
 Upcoming dates (PST):
 ${weekContext}
@@ -96,7 +105,7 @@ When a user mentions a goal or task, immediately propose a fully-formed plan bas
 
 1. **Extract** everything you can from what the user said: topic, time, duration, urgency, work vs personal.
 2. **Fill gaps with smart defaults:**
-   - Time: 08:00 for work tasks, 18:00 for personal tasks (unless user said otherwise)
+   - Time: Use the current time (${currentTimePST} PST) rounded up to the next half-hour as the default preferred_time, unless the user specifies a time. For work tasks default to next available morning hour (08:00–12:00); for personal tasks use the current time rounded up.
    - Duration: 30 min for quick tasks ("call", "appointment"), 1 hour for medium ("write", "review"), 2 hours for deep work ("build", "study", "project")
    - Priority: 3 (medium) unless urgency is implied — "urgent", "ASAP", "critical" → 5; "someday", "eventually" → 1
    - Deadline: tomorrow for one-off tasks, end of week for multi-step tasks, today if the user said "today"
