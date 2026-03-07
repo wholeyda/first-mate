@@ -202,26 +202,19 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
       setQuickReplies(detectedReplies);
 
       // Check for goal JSON and save
-      console.log("[GoalPipeline] assistantContent length:", assistantContent.length);
-      console.log("[GoalPipeline] assistantContent tail:", assistantContent.slice(-300));
       const goals = parseGoalsFromResponse(assistantContent);
-      console.log("[GoalPipeline] parsed goals:", goals.length, goals);
-      console.log("[GoalPipeline] onGoalCreated defined:", !!onGoalCreated);
       if (goals.length > 0 && onGoalCreated) {
         setIsScheduling(true);
         for (const goal of goals) {
           try {
-            console.log("[GoalPipeline] POSTing goal:", goal.title);
             const saveResponse = await fetch("/api/goals", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ goal }),
             });
-            console.log("[GoalPipeline] POST /api/goals status:", saveResponse.status);
 
             if (saveResponse.status === 409) {
               const dupData = await saveResponse.json();
-              console.log("[GoalPipeline] duplicate goal:", dupData);
               setMessages((prev) => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
@@ -233,7 +226,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               });
             } else if (saveResponse.ok) {
               const savedData = await saveResponse.json();
-              console.log("[GoalPipeline] savedData:", JSON.stringify(savedData).slice(0, 500));
               onGoalCreated(goal, savedData.goal, savedData.proposedBlocks);
 
               // Notify the Calendar tab to refresh
@@ -280,7 +272,6 @@ export function Chat({ onGoalCreated, islands, onIslandRemoved, onHistoryCleared
               });
             } else {
               const errData = await saveResponse.json().catch(() => ({ error: "Unknown error" }));
-              console.log("[GoalPipeline] SAVE FAILED status:", saveResponse.status, "error:", errData);
               setMessages((prev) => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {

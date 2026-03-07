@@ -112,12 +112,14 @@ Respond with a JSON object:
       return NextResponse.json({ error: "Failed to save reflection" }, { status: 500 });
     }
 
-    // If successful, mark goal as completed
+    // If successful, mark goal as completed — always scope by user_id to prevent
+    // horizontal privilege escalation (a malicious user spoofing another's goal_id)
     if (wasSuccessful) {
       await supabase
         .from("goals")
         .update({ status: "completed" })
-        .eq("id", goal_id);
+        .eq("id", goal_id)
+        .eq("user_id", user.id);
     }
 
     return NextResponse.json({

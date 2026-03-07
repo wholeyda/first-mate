@@ -49,6 +49,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComplete, onSubGoalStatusChange }: GoalsSidebarProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [togglingSubGoalId, setTogglingSubGoalId] = useState<string | null>(null);
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   const [fetchedSubtasks, setFetchedSubtasks] = useState<Record<string, SubGoal[]>>({});
@@ -99,15 +100,21 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
 
   async function handleDelete(goalId: string) {
     setDeletingId(goalId);
+    setDeleteError(null);
     try {
       const response = await fetch(`/api/goals/${goalId}`, {
         method: "DELETE",
       });
       if (response.ok) {
         onGoalDeleted?.(goalId);
+      } else {
+        setDeleteError("Couldn't delete — please try again.");
+        // Auto-clear error after 3s
+        setTimeout(() => setDeleteError(null), 3000);
       }
     } catch {
-      // Delete failed silently
+      setDeleteError("Couldn't delete — check your connection.");
+      setTimeout(() => setDeleteError(null), 3000);
     } finally {
       setDeletingId(null);
     }
@@ -182,6 +189,13 @@ export function GoalsSidebar({ goals, subGoals = [], onGoalDeleted, onGoalComple
       </div>
 
       {/* Goals list — scrolls for more */}
+      {/* Delete error banner — shows briefly if a delete fails */}
+      {deleteError && (
+        <div className="mx-4 mb-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs">
+          {deleteError}
+        </div>
+      )}
+
       <div className="max-h-[320px] overflow-y-auto">
         <div className="px-6 py-5 space-y-4">
           {goals.length === 0 && (

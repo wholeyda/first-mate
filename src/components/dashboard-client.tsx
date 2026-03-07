@@ -218,8 +218,19 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
         setLocalCompletedCount((c) => c + 1);
         setCompletingGoal(null);
         setRevealIsland({ island, goalTitle: completingGoal.title });
+      } else {
+        // Island creation failed — still mark goal completed and clear state
+        // so the modal doesn't re-open. Goal was already marked complete in DB
+        // by /api/aeiou, so sync the UI to match.
+        setGoals((prev) =>
+          prev.map((g) =>
+            g.id === completingGoal.id ? { ...g, status: "completed" as const } : g
+          )
+        );
+        setCompletingGoal(null);
       }
     } catch {
+      // Network failure — clear state so modal doesn't get stuck
       setCompletingGoal(null);
     }
   }
