@@ -52,6 +52,23 @@ export interface BasePlanetProps {
   animationSpeed?: number;
   /** Ring tilt as [x, y, z] euler rotation in radians */
   ringTilt?: [number, number, number];
+  /** Axial tilt of the entire planet group [x, y, z] in radians */
+  axisTilt?: [number, number, number];
+  /**
+   * Moon config — renders a small orbiting sphere.
+   * color: CSS hex (default gray)
+   * size: multiplier on PLANET_RADIUS (default 0.18)
+   * distance: multiplier on PLANET_RADIUS (default 2.2)
+   * orbitSpeed: radians/second (default 0.8)
+   * orbitTilt: inclination in radians (default 0)
+   */
+  moon?: {
+    color?: string;
+    size?: number;
+    distance?: number;
+    orbitSpeed?: number;
+    orbitTilt?: number;
+  };
 }
 
 export function BasePlanet({
@@ -70,8 +87,11 @@ export function BasePlanet({
   ringSecondaryColor,
   animationSpeed = 1.0,
   ringTilt,
+  axisTilt,
+  moon,
 }: BasePlanetProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const moonRef = useRef<THREE.Group>(null);
   const radius = PLANET_RADIUS * scale;
   const isDark = useSceneTheme();
 
@@ -120,13 +140,24 @@ export function BasePlanet({
   const ringC2 = ringSecondaryColor || accentColor;
 
   // ---- Animation loop ----
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const dt = Math.min(delta, 0.1);
     const darkVal = isDark ? 1.0 : 0.0;
 
     // Self-spin
     if (groupRef.current) {
       groupRef.current.rotation.y += dt * PLANET_SPIN_SPEED + spinOffset * 0.001;
+    }
+
+    // Orbiting moon
+    if (moonRef.current && moon) {
+      const speed = moon.orbitSpeed ?? 0.8;
+      const dist = PLANET_RADIUS * (moon.distance ?? 2.2);
+      const t = state.clock.elapsedTime * speed;
+      const tilt = moon.orbitTilt ?? 0;
+      moonRef.current.position.x = Math.cos(t) * dist;
+      moonRef.current.position.y = Math.sin(t) * dist * Math.sin(tilt);
+      moonRef.current.position.z = Math.sin(t) * dist * Math.cos(tilt);
     }
 
     // Update glass sphere uniforms
@@ -154,37 +185,47 @@ export function BasePlanet({
   });
 
   return (
-    <group ref={groupRef}>
-      {/* Glass sphere surface */}
-      <mesh material={glassMaterial}>
-        {lowPoly ? (
-          <icosahedronGeometry args={[radius, detail]} />
-        ) : (
-          <sphereGeometry args={[radius, 64, 64]} />
+    <group rotation={axisTilt ? new THREE.Euler(...axisTilt) : undefined}>
+      <group ref={groupRef}>
+        {/* Glass sphere surface */}
+        <mesh material={glassMaterial}>
+          {lowPoly ? (
+            <icosahedronGeometry args={[radius, detail]} />
+          ) : (
+            <sphereGeometry args={[radius, 64, 64]} />
+          )}
+        </mesh>
+
+        {/* Atmosphere rim (FrontSide) */}
+        <mesh material={atmosphereMaterial}>
+          <sphereGeometry args={[radius * 1.05, 32, 32]} />
+        </mesh>
+
+        {/* Cube ring */}
+        {hasRings && (
+          <CubeRing
+            innerRadius={radius * 1.5}
+            outerRadius={radius * 3.0}
+            count={150}
+            cubeSize={0.03}
+            color1={ringC1}
+            color2={ringC2}
+            speed={animationSpeed}
+            tilt={ringTilt}
+          />
         )}
-      </mesh>
 
-      {/* Atmosphere rim (FrontSide) */}
-      <mesh material={atmosphereMaterial}>
-        <sphereGeometry args={[radius * 1.05, 32, 32]} />
-      </mesh>
+        {/* Orbiting moon (data-driven, position updated in useFrame) */}
+        {moon && (
+          <mesh ref={moonRef}>
+            <sphereGeometry args={[PLANET_RADIUS * (moon.size ?? 0.18), 12, 12]} />
+            <meshStandardMaterial color={moon.color ?? "#888888"} roughness={0.9} />
+          </mesh>
+        )}
 
-      {/* Cube ring */}
-      {hasRings && (
-        <CubeRing
-          innerRadius={radius * 1.5}
-          outerRadius={radius * 3.0}
-          count={150}
-          cubeSize={0.03}
-          color1={ringC1}
-          color2={ringC2}
-          speed={animationSpeed}
-          tilt={ringTilt}
-        />
-      )}
-
-      {/* Type-specific extras (moons, shards, gears, etc.) */}
-      {children}
+        {/* Type-specific extras (moons, shards, gears, etc.) */}
+        {children}
+      </group>
     </group>
   );
 }

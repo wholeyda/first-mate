@@ -14,6 +14,7 @@ import { ThreeEvent } from "@react-three/fiber";
 import { Island } from "@/types/database";
 import { computeOrbitPosition } from "./hooks/useOrbitalMotion";
 import { IslandTypeName } from "./types";
+import { islandIdToSeed } from "./planetSeed";
 import {
   VolcanicPlanet,
   CrystallinePlanet,
@@ -35,35 +36,35 @@ interface PlanetMeshProps {
   onClick?: (island: Island) => void;
 }
 
-function PlanetTypeRenderer({ type, colors }: { type: IslandTypeName; colors: string[] }) {
+function PlanetTypeRenderer({ type, colors, seed }: { type: IslandTypeName; colors: string[]; seed: number }) {
   switch (type) {
     case "volcanic":
-      return <VolcanicPlanet colors={colors} />;
+      return <VolcanicPlanet colors={colors} seed={seed} />;
     case "crystalline":
-      return <CrystallinePlanet colors={colors} />;
+      return <CrystallinePlanet colors={colors} seed={seed} />;
     case "nebula":
-      return <NebulaPlanet colors={colors} />;
+      return <NebulaPlanet colors={colors} seed={seed} />;
     case "desert":
-      return <DesertPlanet colors={colors} />;
+      return <DesertPlanet colors={colors} seed={seed} />;
     case "steampunk":
-      return <SteampunkPlanet colors={colors} />;
+      return <SteampunkPlanet colors={colors} seed={seed} />;
     case "arctic":
-      return <ArcticPlanet colors={colors} />;
+      return <ArcticPlanet colors={colors} seed={seed} />;
     case "tropical":
-      return <TropicalPlanet colors={colors} />;
+      return <TropicalPlanet colors={colors} seed={seed} />;
     case "forest":
-      return <ForestPlanet colors={colors} />;
+      return <ForestPlanet colors={colors} seed={seed} />;
     case "garden":
-      return <GardenPlanet colors={colors} />;
+      return <GardenPlanet colors={colors} seed={seed} />;
     case "coral":
-      return <CoralPlanet colors={colors} />;
+      return <CoralPlanet colors={colors} seed={seed} />;
     case "bioluminescent":
-      return <BioluminescentPlanet colors={colors} />;
+      return <BioluminescentPlanet colors={colors} seed={seed} />;
     case "floating":
-      return <FloatingPlanet colors={colors} />;
+      return <FloatingPlanet colors={colors} seed={seed} />;
     default:
       // Fallback: tropical
-      return <TropicalPlanet colors={colors} />;
+      return <TropicalPlanet colors={colors} seed={seed} />;
   }
 }
 
@@ -98,6 +99,7 @@ export function PlanetMesh({ island, globalAngle, onClick }: PlanetMeshProps) {
 
   const colors = island.color_palette || ["#4ECDC4", "#45B7D1", "#96CEB4"];
   const typeName = (island.island_type || "tropical") as IslandTypeName;
+  const seed = islandIdToSeed(island.id);
 
   return (
     <group
@@ -108,7 +110,7 @@ export function PlanetMesh({ island, globalAngle, onClick }: PlanetMeshProps) {
       onPointerOut={handlePointerOut}
       scale={hovered ? 1.1 : 1.0}
     >
-      <PlanetTypeRenderer type={typeName} colors={colors} />
+      <PlanetTypeRenderer type={typeName} colors={colors} seed={seed} />
     </group>
   );
 }

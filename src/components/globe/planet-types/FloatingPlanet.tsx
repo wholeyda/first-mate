@@ -3,6 +3,7 @@
  *
  * 5-7 fragmented glass chunks floating in formation with <Float> bobbing.
  * Each chunk uses the glass sphere shader for consistent look.
+ * Per-instance variation via seed: chunk count, spread, float speed.
  *
  * Theme-aware via useSceneTheme():
  *   Dark mode  — full color glass
@@ -18,12 +19,14 @@ import * as THREE from "three";
 import { PLANET_RADIUS } from "../constants";
 import { useSceneTheme } from "../SceneThemeContext";
 import { GLASS_SPHERE_VERTEX, GLASS_SPHERE_FRAGMENT } from "../shaders/glassSphere.glsl";
+import { makePlanetRng } from "../planetSeed";
 
 interface Props {
   colors: string[];
+  seed?: number;
 }
 
-export function FloatingPlanet({ colors }: Props) {
+export function FloatingPlanet({ colors, seed = 0 }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const isDark = useSceneTheme();
 
@@ -47,40 +50,46 @@ export function FloatingPlanet({ colors }: Props) {
     });
   }, [colors]);
 
+  const v = useMemo(() => {
+    const rng = makePlanetRng(String(seed));
+    const chunkCount = rng.int(4, 7);
+    const spread     = rng.float(0.5, 0.9);
+    const axisTiltX  = rng.float(-0.3, 0.3);
+    const rotSpeed   = rng.float(0.1, 0.35);
+    const chunks = [
+      [0, 0, 0] as [number, number, number],
+      ...Array.from({ length: chunkCount - 1 }, (_, i) => {
+        const angle = (i / (chunkCount - 1)) * Math.PI * 2;
+        const dist  = PLANET_RADIUS * spread;
+        return [
+          Math.cos(angle) * dist,
+          rng.float(-0.3, 0.3) * PLANET_RADIUS,
+          Math.sin(angle) * dist,
+        ] as [number, number, number];
+      }),
+    ];
+    const sizes = chunks.map((_, i) =>
+      i === 0
+        ? PLANET_RADIUS * rng.float(0.45, 0.65)
+        : PLANET_RADIUS * rng.float(0.15, 0.32)
+    );
+    return { chunkCount, chunks, sizes, axisTiltX, rotSpeed };
+  }, [seed]);
+
   // Slow group rotation + time + theme update
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.1);
     if (groupRef.current) {
-      groupRef.current.rotation.y += dt * 0.2;
+      groupRef.current.rotation.y += dt * v.rotSpeed;
     }
     glassMaterial.uniforms.uTime.value += dt;
     glassMaterial.uniforms.uIsDark.value = isDark ? 1.0 : 0.0;
   });
 
-  // Generate chunk positions
-  const chunks = useMemo(() => {
-    const positions: [number, number, number][] = [];
-    const r = PLANET_RADIUS;
-    // Central chunk
-    positions.push([0, 0, 0]);
-    // Surrounding chunks
-    for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2;
-      const dist = r * 0.7;
-      positions.push([
-        Math.cos(angle) * dist,
-        (Math.random() - 0.5) * r * 0.6,
-        Math.sin(angle) * dist,
-      ]);
-    }
-    return positions;
-  }, []);
-
   return (
-    <group ref={groupRef}>
-      {chunks.map((pos, i) => {
-        const size = i === 0 ? PLANET_RADIUS * 0.55 : PLANET_RADIUS * (0.2 + Math.random() * 0.15);
-        return (
+    <group rotation={[v.axisTiltX, 0, 0]}>
+      <group ref={groupRef}>
+        {v.chunks.map((pos, i) => (
           <Float
             key={i}
             speed={1.5 + i * 0.3}
@@ -88,12 +97,11 @@ export function FloatingPlanet({ colors }: Props) {
             floatIntensity={0.8}
           >
             <mesh position={pos} material={glassMaterial}>
-              <dodecahedronGeometry args={[size, 0]} />
+              <dodecahedronGeometry args={[v.sizes[i], 0]} />
             </mesh>
           </Float>
-        );
-      })}
-
+        ))}
+      </group>
     </group>
   );
 }
