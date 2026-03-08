@@ -96,9 +96,21 @@ export async function POST(request: NextRequest) {
     // Generate random island properties from the appropriate pool
     const island_type = typePool[Math.floor(Math.random() * typePool.length)];
     const color_palette = COLOR_PALETTES[Math.floor(Math.random() * COLOR_PALETTES.length)];
-    // Random position on the sphere surface
-    const position_theta = Math.random() * Math.PI * 2; // 0 to 2pi
-    const position_phi = Math.acos(2 * Math.random() - 1); // 0 to pi (uniform sphere distribution)
+
+    // Count existing islands to assign a golden-angle theta so planets never overlap.
+    // Golden angle (≈137.5°) gives the best possible angular spread for any number of points.
+    const { count: islandCount } = await supabase
+      .from("islands")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    const GOLDEN_ANGLE = 2.399963; // radians
+    const idx = islandCount ?? 0;
+    const position_theta = (idx * GOLDEN_ANGLE) % (Math.PI * 2);
+    // Alternate phi in equatorial bands so planets stay in a disc, not at poles
+    const PHI_BANDS = [
+      Math.PI * 0.38, Math.PI * 0.44, Math.PI * 0.50, Math.PI * 0.56, Math.PI * 0.62,
+    ];
+    const position_phi = PHI_BANDS[idx % PHI_BANDS.length];
 
     const { data: island, error } = await supabase
       .from("islands")
