@@ -35,6 +35,7 @@ First Mate is an AI-powered productivity app. You tell it what you want to accom
 |                                                                   |
 |  /api/chat      /api/goals     /api/calendar    /api/onboarding  |
 |  /api/islands   /api/news      /api/suggestions  /api/star-prefs |
+|  /api/aeiou     /api/voice/stt  /api/voice/tts                   |
 +------------------------------------------------------------------+
           |                    |                    |
           v                    v                    v
@@ -168,7 +169,7 @@ User clicks checkmark on goal card
 | AEIOU Reflection Modal    |
 | (aeiou-modal.tsx)         |
 |                           |
-| User answers:             |
+| Text OR Voice mode:       |
 | - Activities              |
 | - Environments            |
 | - Interactions            |
@@ -176,6 +177,12 @@ User clicks checkmark on goal card
 | - Users present           |
 | - Excitement level        |
 | - Peak moments            |
+|                           |
+| Voice loop:               |
+| useDeepgramSTT -> speak   |
+| AI streams response       |
+| useElevenLabsTTS -> plays |
+| -> resume listening       |
 +---------------------------+
         |
         v
@@ -188,7 +195,8 @@ User clicks checkmark on goal card
 +---------------------------+
 | POST /api/islands         |
 | Create reward planet      |
-| (random type + colors)    |
+| (seeded type + colors     |
+|  deterministic per goal)  |
 +---------------------------+
         |
         v
@@ -252,10 +260,13 @@ User clicks checkmark on goal card
 |  |  |  |                                  |  |  |
 |  |  |  +-- CentralStar                    |  |  |
 |  |  |  |   Glass sphere + atmosphere      |  |  |
+|  |  |  |   No rings                       |  |  |
 |  |  |  |   Clickable -> customize         |  |  |
 |  |  |  |                                  |  |  |
 |  |  |  +-- BasePlanet (per goal)          |  |  |
 |  |  |  |   Orbits at distance 6.0         |  |  |
+|  |  |  |   Seeded variation per islandId  |  |  |
+|  |  |  |   Optional moon + axis tilt      |  |  |
 |  |  |  |   Clickable -> remove modal      |  |  |
 |  |  |  |                                  |  |  |
 |  |  |  +-- RocketShip (x4)               |  |  |
@@ -368,22 +379,35 @@ src/
 |   +-- globe.tsx                 # Globe wrapper (Suspense)
 |   +-- globe/
 |   |   +-- Globe3D.tsx           # R3F Canvas + Scene
-|   |   +-- CentralStar.tsx       # Hero planet (glass sphere)
+|   |   +-- CentralStar.tsx       # Hero planet (glass sphere, no rings)
 |   |   +-- RocketShip.tsx        # Animated rockets
 |   |   +-- SceneThemeContext.tsx  # Theme bridge for Canvas
+|   |   +-- PlanetMesh.tsx        # Picks planet type + passes seed
 |   |   +-- constants.ts          # Sizes, speeds, distances
+|   |   +-- planetSeed.ts         # djb2 hash + Mulberry32 PRNG
 |   |   +-- planet-types/
-|   |   |   +-- BasePlanet.tsx    # Orbiting goal planets
+|   |   |   +-- BasePlanet.tsx    # Orbiting goal planets (axisTilt, moon)
 |   |   |   +-- FloatingPlanet.tsx# Reveal animation planet
+|   |   |   +-- VolcanicPlanet.tsx
+|   |   |   +-- CrystallinePlanet.tsx
+|   |   |   +-- NebulaPlanet.tsx
+|   |   |   +-- DesertPlanet.tsx
+|   |   |   +-- SteampunkPlanet.tsx
+|   |   |   +-- ArcticPlanet.tsx
+|   |   |   +-- TropicalPlanet.tsx
+|   |   |   +-- ForestPlanet.tsx
+|   |   |   +-- GardenPlanet.tsx
+|   |   |   +-- CoralPlanet.tsx
+|   |   |   +-- BioluminescentPlanet.tsx
 |   |   +-- shaders/
 |   |       +-- glassSphere.glsl.ts
 |   |       +-- atmosphereRim.glsl.ts
 |   |       +-- accretionDisk.glsl.ts
 |   +-- goals-sidebar.tsx         # Right panel: goals + tips
 |   +-- calendar-view.tsx         # Weekly calendar grid
-|   +-- instructions-modal.tsx    # Onboarding carousel
-|   +-- instructions-button.tsx   # Header button (custom event)
-|   +-- aeiou-modal.tsx           # Goal completion reflection
+|   +-- instructions-modal.tsx    # Onboarding carousel (6 slides, auto-opens)
+|   +-- instructions-button.tsx   # Header button (dispatches custom event)
+|   +-- aeiou-modal.tsx           # Goal completion reflection (text + voice)
 |   +-- island-reveal.tsx         # Planet unlock animation
 |   +-- star-customization-panel.tsx
 |   +-- news-panel.tsx            # AI-curated tips
@@ -395,9 +419,12 @@ src/
 +-- lib/
 |   +-- supabase/server.ts        # Supabase SSR client
 |   +-- parse-goal.ts             # Extract goal JSON from AI text
-|   +-- chat-system-prompt.ts     # Claude system prompt builder
+|   +-- chat-system-prompt.ts     # Claude system prompt (date + time injection)
 |   +-- google-calendar.ts        # Google Cal API helpers
 |   +-- notifications.ts          # Browser push notifications
+|   +-- hooks/
+|       +-- useDeepgramSTT.ts     # Deepgram speech-to-text hook
+|       +-- useElevenLabsTTS.ts   # ElevenLabs text-to-speech hook
 |
 +-- types/
     +-- database.ts               # All DB table interfaces
@@ -429,3 +456,72 @@ src/
 | **Anthropic (Claude)** | AI chat, goal parsing, tips | Pay per token (~$3/M input, $15/M output) |
 | **Google Calendar** | Event sync, availability | Free (OAuth) |
 | **Vercel** (deployment) | Hosting, serverless functions | Free tier available |
+| **Deepgram** | Speech-to-text (STT) for voice input | Pay per minute |
+| **ElevenLabs** | Text-to-speech (TTS) for AI voice responses | Pay per character |
+
+---
+
+## Recent Changes (Changelog)
+
+### Voice System
+- Added Deepgram STT integration via `/api/voice/stt` proxy — browser sends audio, proxy forwards to Deepgram REST API
+- Safari fix: audio recorded as `audio/mp4`, mimetype passed as query param (`?mimetype=audio/mp4`) to Deepgram proxy
+- Added ElevenLabs TTS via `/api/voice/tts` — AI responses are spoken aloud in AEIOU voice mode
+- AEIOU voice loop bug fixed: stale closure caused voice to stop after 3rd question. Fixed with `startListeningRef` / `stopListeningRef` updated via `useEffect` so callbacks always reference the latest function
+- Fixed `[AEIOU_COMPLETE]` with empty JSON not resetting `isProcessingRef`, which permanently locked voice input
+
+### AI Time Awareness
+- Injected `currentTimePST` into the Claude system prompt (alongside `todayPST`) so the AI uses the actual current hour when proposing calendar blocks — previously defaulted to 4pm regardless of time of day
+
+### Planet Visual Variation
+- Added `src/components/globe/planetSeed.ts` — deterministic PRNG using djb2 string hash + Mulberry32 algorithm
+- Each planet is seeded from its `islandId` so it looks the same every session but unique per goal
+- All 12 planet types (Volcanic, Crystalline, Nebula, Desert, Steampunk, Arctic, Tropical, Forest, Garden, Coral, Bioluminescent, Floating) now accept a `seed` prop
+- Per-instance variation includes: scale, animation speed, axis tilt, pulse frequency/amplitude, ring tilt, and optional moon (color, size, orbit distance, orbit speed, orbit tilt)
+- `BasePlanet.tsx` extended with `axisTilt` and `moon` props; moon orbits via `useFrame`
+- `PlanetMesh.tsx` computes `seed = islandIdToSeed(island.id)` and passes it to all planet components
+
+### Onboarding
+- Added 6-slide instructions carousel modal (`instructions-modal.tsx`)
+- Auto-opens on first visit via `has_seen_onboarding` column on `users` table
+- Header "Instructions" button dispatches `open-instructions` custom DOM event to open modal from server component context
+
+### UI Fixes
+- Sidebar close (X) button now only renders when sidebar is open — previously it floated outside the panel and covered the "Sign Out" header button when the sidebar was closed
+- Removed accretion disk rings from `CentralStar`
+- Globe fills entire chat panel as absolute background (no box-in-box)
+- Header "First Mate" title aligned with Chat tab (removed `max-w-7xl` centering)
+- Removed "What would you like to accomplish?" placeholder text from chat input
+
+### Claude Code Skills (Global)
+- `/pm-mentor` — Elite PM career mentor: resume + session audit → skill scorecard + 30-day roadmap
+- `/design` — Product designer agent: live browser audit → prioritized change table
+- All project-level skills copied to `~/.claude/skills/` to make them available globally across sessions
+
+---
+
+## Voice Architecture (In Progress)
+
+```
++---------------------------+
+| AEIOU Modal (voice mode)  |
+|                           |
+| 1. useDeepgramSTT()       |
+|    - Records audio        |
+|    - POST /api/voice/stt  |
+|    - Returns transcript   |
+|                           |
+| 2. POST /api/chat         |
+|    - Same message history |
+|    - Streams AI response  |
+|                           |
+| 3. useElevenLabsTTS()     |
+|    - POST /api/voice/tts  |
+|    - Plays audio response |
+|                           |
+| 4. Resume listening       |
+|    (loop continues)       |
++---------------------------+
+```
+
+Planet animation pulses with TTS playback. Voice mode is active within the AEIOU reflection flow (goal completion).

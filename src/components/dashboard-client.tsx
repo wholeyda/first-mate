@@ -328,16 +328,18 @@ export function DashboardClient({ initialGoals, initialSubGoals = [], completedG
       <div className={`fixed top-0 right-0 h-full z-40 w-80 sm:w-96 transform transition-transform duration-300 ease-in-out ${
         sidebarOpen ? "translate-x-0" : "translate-x-full"
       }`}>
-        {/* Close button inside sidebar */}
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="absolute top-4 left-[-40px] z-50 w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-md text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors cursor-pointer"
-          title="Close sidebar"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        {/* Close button — only visible when sidebar is open */}
+        {sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute top-4 right-4 z-50 w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-md text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors cursor-pointer"
+            title="Close sidebar"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
         <GoalsSidebar
           goals={activeGoals}
           subGoals={subGoals}
