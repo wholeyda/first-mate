@@ -98,13 +98,17 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
     const speakText = text.split("[AEIOU_COMPLETE]")[0].trim();
     if (!speakText) { onDone?.(); return; }
 
+    // Guard so onDone fires exactly once regardless of which path ends playback
+    let doneCalled = false;
+    const callDone = () => { if (!doneCalled) { doneCalled = true; onDone?.(); } };
+
     try {
       const res = await fetch("/api/voice/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: speakText, voice: "female" }),
       });
-      if (!res.ok) { onDone?.(); return; }
+      if (!res.ok) { callDone(); return; }
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -121,26 +125,35 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
       };
       ttsAnimRef.current = requestAnimationFrame(pulse);
 
-      audio.onended = () => {
+      const cleanupAudio = () => {
         cancelAnimationFrame(ttsAnimRef.current);
         setTtsAmplitude(0);
         URL.revokeObjectURL(url);
         if (audio.parentNode) audio.parentNode.removeChild(audio);
         ttsAudioRef.current = null;
-        onDone?.();
+      };
+
+      // Safety-net timeout: if onended never fires (Safari bug), recover after duration + 3s
+      let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+      audio.onloadedmetadata = () => {
+        const dur = isFinite(audio.duration) && audio.duration > 0 ? audio.duration * 1000 : 15000;
+        fallbackTimer = setTimeout(() => { cleanupAudio(); callDone(); }, dur + 3000);
+      };
+
+      audio.onended = () => {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        cleanupAudio();
+        callDone();
       };
       audio.onerror = () => {
-        cancelAnimationFrame(ttsAnimRef.current);
-        setTtsAmplitude(0);
-        URL.revokeObjectURL(url);
-        if (audio.parentNode) audio.parentNode.removeChild(audio);
-        ttsAudioRef.current = null;
-        onDone?.();
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        cleanupAudio();
+        callDone();
       };
       audio.src = url;
       await audio.play();
     } catch {
-      onDone?.();
+      callDone();
     }
   }, [stopTts]);
 
@@ -534,6 +547,7 @@ export function AeiouModal({ goal, isOpen, onClose, onSuccess }: AeiouModalProps
                     onClick={() => {
                       stopTts();
                       stopListeningFn();
+                      isProcessingRef.current = false;
                       setUseVoice(false);
                     }}
                     className={`text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
